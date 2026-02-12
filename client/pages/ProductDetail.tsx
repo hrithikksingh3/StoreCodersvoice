@@ -1,0 +1,335 @@
+
+import React, { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { PRODUCTS } from '../constants';
+import { Product } from '../types';
+import ProductCard from '../components/ProductCard';
+import { API_BASE_URL } from "../config";
+import toast from "react-hot-toast";
+
+
+
+const ProductDetail: React.FC = () => {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [activeImage, setActiveImage] = useState<string>('');
+
+  const [showEmailModal, setShowEmailModal] = useState(false);
+const [selectedProduct, setSelectedProduct] = useState<any>(null);
+const [email, setEmail] = useState("");
+
+
+const [isProcessing, setIsProcessing] = useState(false);
+const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+
+  useEffect(() => {
+    const found = PRODUCTS.find(p => p.slug === slug);
+    if (found) {
+      setProduct(found);
+      setActiveImage(found.thumbnail);
+      window.scrollTo(0, 0);
+    } else {
+      navigate('/store');
+    }
+  }, [slug, navigate]);
+
+  if (!product) return null;
+
+  const similarProducts = PRODUCTS.filter(p => p.category === product.category && p.id !== product.id).slice(0, 3);
+
+  //handle buy now click
+
+  const handleCheckout = (product: any) => {
+  setSelectedProduct(product);
+  setShowEmailModal(true);
+};
+
+
+const confirmCheckout = async () => {
+  if (!email || !selectedProduct) return;
+  setIsProcessing(true);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/payment/create-order`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        productId: selectedProduct.slug,
+        email: email,
+      }),
+    });
+
+    const data = await response.json();
+setIsProcessing(false);
+    if (!data.success) {
+      alert(data.message || "Order failed");
+      return;
+    }
+
+    // 🔥 Open Razorpay
+    const options = {
+      key: data.key,
+      amount: data.amount,
+      currency: data.currency,
+      name: "CodersVoice",
+      description: data.productName,
+      order_id: data.orderId,
+      prefill: {
+        email: email,
+      },
+      theme: {
+        color: "#2563eb",
+      },
+  handler: async function (response) {
+     setIsProcessing(true);
+  try {
+    const verifyRes = await fetch(`${API_BASE_URL}/api/payment/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(response),
+    });
+
+    const result = await verifyRes.json();
+ setIsProcessing(false);
+    if (result.success) {
+        setShowSuccessModal(true);
+      toast.success("Payment successful! File has been sent to your email 🚀");
+    } else {
+      toast.error("Payment verification failed ❌");
+    }
+  } catch (err) {
+    toast.error("Something went wrong 😓");
+  }
+},
+    };
+
+    const rzp = new (window as any).Razorpay(options);
+    rzp.open();
+
+    setShowEmailModal(false);
+    setEmail("");
+    setSelectedProduct(null);
+
+  } catch (error) {
+    console.error("Checkout error:", error);
+  }
+};
+
+
+  return (
+    <div className="pt-32 pb-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Breadcrumbs */}
+        <div className="flex items-center space-x-2 text-xs text-slate-500 mb-8 uppercase font-bold tracking-widest">
+          <Link to="/" className="hover:text-white">Home</Link>
+          <span>/</span>
+          <Link to="/store" className="hover:text-white">Marketplace</Link>
+          <span>/</span>
+          <span className="text-blue-400">{product.title}</span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 mb-24">
+          {/* Gallery */}
+          <div>
+            <div className="glass aspect-video rounded-3xl overflow-hidden mb-4 border-white/5">
+              <img src={activeImage} alt={product.title} className="w-full h-full object-cover" />
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {[product.thumbnail, ...product.galleryImages].map((img, idx) => (
+                <button 
+                  key={idx}
+                  onClick={() => setActiveImage(img)}
+                  className={`flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden glass border-2 transition-all ${activeImage === img ? 'border-blue-500' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                >
+                  <img src={img} alt={`${product.title} view ${idx}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Details */}
+          <div>
+            <div className="inline-block px-3 py-1 rounded-full bg-blue-600/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider mb-4">
+              {product.category}
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black mb-6 text-white">{product.title}</h1>
+            <div className="text-3xl font-black text-white mb-8">₹{product.price}</div>
+            
+            <p className="text-slate-400 text-lg mb-10 leading-relaxed">
+              {product.fullDescription}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+              <a 
+                href={product.demoUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl glass border-white/10 text-white font-bold hover:bg-slate-800 transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                Live Demo
+              </a>
+           <button
+           type="button"
+  onClick={() => handleCheckout(product)}
+  className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xl shadow-blue-500/20 transition-all active:scale-95"
+>
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+    />
+  </svg>
+  Buy Now
+</button>
+
+            </div>
+
+            <div className="space-y-6 pt-8 border-t border-slate-900">
+              <div>
+                <h4 className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-3">Tech Stack</h4>
+                <div className="flex flex-wrap gap-2">
+                  {product.techStack.map(tech => (
+                    <span key={tech} className="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-300 text-xs font-medium border border-slate-800">
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-3">What's Included</h4>
+                <ul className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  {['Full Source Code', 'Documentation', '1 Year Updates', 'Assets & Fonts', 'Setup Guide'].map(item => (
+                    <li key={item} className="flex items-center gap-2 text-slate-400 text-sm">
+                      <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Similar Products */}
+        {similarProducts.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-black mb-8">Similar Products</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              {similarProducts.map(p => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          </div>
+        )}
+
+{/* email prompt modal  */}
+{showEmailModal && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="glass rounded-2xl p-8 w-full max-w-md border border-white/10">
+      <h2 className="text-2xl font-bold text-white mb-4">
+        Enter Your Email
+      </h2>
+
+      <p className="text-slate-400 text-sm mb-6">
+        We’ll send the source code to your email after payment.
+      </p>
+
+      <input
+        type="email"
+        placeholder="you@example.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6"
+      />
+
+      <div className="flex gap-4">
+        <button
+          onClick={() => setShowEmailModal(false)}
+          className="flex-1 py-3 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={confirmCheckout}
+          className="flex-1 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+{/* processing modal  */}
+{isProcessing && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="glass rounded-2xl p-8 flex flex-col items-center gap-6 border border-white/10">
+      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-white font-medium">
+        Processing payment...
+      </p>
+    </div>
+  </div>
+)}
+
+{/* success modal  */}
+{showSuccessModal && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="glass rounded-3xl p-10 w-full max-w-md text-center border border-green-500/20">
+
+      <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-500/20 flex items-center justify-center">
+        <svg
+          className="w-10 h-10 text-green-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+            d="M5 13l4 4L19 7"
+          />
+        </svg>
+      </div>
+
+      <h2 className="text-2xl font-bold text-white mb-3">
+        Payment Successful 🎉
+      </h2>
+
+      <p className="text-slate-400 mb-6">
+        The source code has been sent to your email.
+      </p>
+
+      <button
+        onClick={() => {
+          setShowSuccessModal(false);
+          navigate("/store");
+        }}
+        className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold transition"
+      >
+        Continue Shopping
+      </button>
+    </div>
+  </div>
+)}
+
+      </div>
+    </div>
+  );
+};
+
+export default ProductDetail;

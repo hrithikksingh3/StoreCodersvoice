@@ -1,0 +1,9 @@
+
+{
+  "name": "CodersVoice Store",
+  "description": "A premium dark-themed digital storefront for web projects, templates, and creator bundles with a futuristic UI and seamless navigation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
