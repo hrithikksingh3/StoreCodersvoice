@@ -3,21 +3,25 @@ const cors = require('cors');
 
 const app = express();
 
-app.use(cors());
-app.use(cors({
-  origin: [
-"https://codersvoice.onrender.com",
-"http://localhost:5500",
-"http://127.0.0.1:5500",
-"https://codersvoice-dev.onrender.com"
 
-],
+app.use(cors({
+//   origin: [
+// "https://codersvoice.onrender.com",
+// "http://localhost:5500",
+// "http://127.0.0.1:5500",
+// "https://codersvoice-dev.onrender.com"
+
+// ],
+origion: process.env.FRONTEND_URL || "http://localhost:5173",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: false
 }));
 
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.send('CodersVoice Backend API Running');
+});
 // Routes
 app.use('/api/contact', require('./routes/contact.routes'));
 app.use('/api/newsletter', require('./routes/newsletter.routes'));
@@ -29,9 +33,7 @@ app.use((req, res) => {
   });
 });
 
-app.get('/', (req, res) => {
-  res.send('CodersVoice Backend API Running');
-});
+
 
 module.exports = app;
 
