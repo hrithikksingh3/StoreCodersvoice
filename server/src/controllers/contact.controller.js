@@ -25,7 +25,7 @@ exports.submitContact = async (req, res) => {
     // Email notification
    // Email notification to admin
 await sendMail({
-  to: 'codersvoice1@gmail.com',
+  to: 'hrithikwebsoultions@gmail.com',
   subject: `🚀 New Project Pitch — ${name}`,
   html: `
     <div style="

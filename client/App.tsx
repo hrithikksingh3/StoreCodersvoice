@@ -11,6 +11,7 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import FAQ from './pages/FAQ';
 import Policies from './pages/Policies';
+import AIAssistant from './components/AIAssistant';
 import { Toaster } from "react-hot-toast";
 
 
@@ -43,6 +44,8 @@ const App: React.FC = () => {
             <Route path="/privacy" element={<Policies />} />
             <Route path="/refund" element={<Policies />} />
           </Routes>
+          <AIAssistant />
+
         </main>
         <Footer />
       </div>

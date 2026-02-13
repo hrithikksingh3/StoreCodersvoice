@@ -24,8 +24,9 @@ app.get('/', (req, res) => {
 });
 // Routes
 app.use('/api/contact', require('./routes/contact.routes'));
-app.use('/api/newsletter', require('./routes/newsletter.routes'));
 app.use('/api/payment', require('./routes/payment.routes'));
+app.use("/api/ai", require("./routes/ai.routes"));
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
