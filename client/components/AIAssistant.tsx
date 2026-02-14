@@ -163,14 +163,14 @@ const AIAssistant = () => {
                         {/* CTA Buttons */}
                         <div className="flex gap-2 pt-1">
                           <a
-                            href={`/marketplace/${p.slug}#/product/${p.slug}`}
+                           href={`/#/product/${p.slug}`}
                             className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 rounded-lg"
                           >
                             View Details
                           </a>
 
                           <a
-                            href={`/marketplace/${p.slug}#/product/${p.slug}`}
+                            href={`/#/product/${p.slug}`}
                             className="flex-1 text-center bg-green-600 hover:bg-green-700 text-white text-xs py-1.5 rounded-lg"
                           >
                             Buy Now
