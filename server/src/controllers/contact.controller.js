@@ -1,12 +1,13 @@
 const Contact = require('../models/Contact');
 const sendMail = require('../utils/sendMail');
+const escapeHtml = (value) => String(value || '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 
 exports.submitContact = async (req, res) => {
   try {
     const { name, email, role, budget, message } = req.body;
 
     // Required fields based on UI
-    if (!name || !email || !message) {
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof message !== 'string' || !name.trim() || !/^\S+@\S+\.\S+$/.test(email) || !message.trim() || name.length > 120 || email.length > 254 || message.length > 5000 || (role && (typeof role !== 'string' || role.length > 120)) || (budget && (typeof budget !== 'string' || budget.length > 80))) {
       return res.status(400).json({
         success: false,
         message: 'Name, Email and Project Description are required'
@@ -51,19 +52,19 @@ await sendMail({
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <tr>
           <td style="padding:10px 8px;font-weight:700;color:#020617;">Name</td>
-          <td style="padding:10px 8px;color:#334155;">${name}</td>
+          <td style="padding:10px 8px;color:#334155;">${escapeHtml(name)}</td>
         </tr>
         <tr style="background:#f8fafc;">
           <td style="padding:10px 8px;font-weight:700;color:#020617;">Email</td>
-          <td style="padding:10px 8px;color:#334155;">${email}</td>
+          <td style="padding:10px 8px;color:#334155;">${escapeHtml(email)}</td>
         </tr>
         <tr>
           <td style="padding:10px 8px;font-weight:700;color:#020617;">Company / Role</td>
-          <td style="padding:10px 8px;color:#334155;">${role || 'Not provided'}</td>
+          <td style="padding:10px 8px;color:#334155;">${escapeHtml(role || 'Not provided')}</td>
         </tr>
         <tr style="background:#f8fafc;">
           <td style="padding:10px 8px;font-weight:700;color:#020617;">Budget</td>
-          <td style="padding:10px 8px;color:#334155;">${budget || 'Not specified'}</td>
+          <td style="padding:10px 8px;color:#334155;">${escapeHtml(budget || 'Not specified')}</td>
         </tr>
       </table>
 
@@ -81,7 +82,7 @@ await sendMail({
           line-height:1.6;
           white-space:pre-line;
         ">
-          ${message}
+          ${escapeHtml(message)}
         </div>
       </div>
 

@@ -1,0 +1,12 @@
+const PAGE_SIZE = 20;
+const safePage = (value) => Math.max(1, Math.min(Number.parseInt(value, 10) || 1, 100000));
+const safeLimit = (value) => Math.max(1, Math.min(Number.parseInt(value, 10) || PAGE_SIZE, 100));
+const slugify = (value) => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const text = (value, max) => typeof value === 'string' && value.trim().length <= max;
+const requiredText = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max;
+const validUrl = (value) => !value || (typeof value === 'string' && /^https?:\/\//i.test(value));
+const stringArray = (value, max = 30) => Array.isArray(value) && value.length <= max && value.every((item) => text(item, 80));
+const pagination = (query) => ({ page: safePage(query.page), limit: safeLimit(query.limit) });
+const publicProduct = (item) => ({ _id: item._id, id: item._id, name: item.name, title: item.name, slug: item.slug, shortDescription: item.shortDescription, description: item.description, fullDescription: item.description, price: item.price, currency: item.currency, category: item.category, tags: item.tags, techStack: item.techStack, thumbnail: item.thumbnail, galleryImages: item.galleryImages, demoUrl: item.demoUrl, featured: item.featured, status: item.status, createdAt: item.createdAt, seoTitle: item.seoTitle, seoDescription: item.seoDescription, canonicalUrl: item.canonicalUrl, ogTitle: item.ogTitle, ogDescription: item.ogDescription, ogImage: item.ogImage });
+const publicBlog = (item) => ({ _id: item._id, id: item._id, title: item.title, slug: item.slug, excerpt: item.excerpt, content: item.content, featuredImage: item.featuredImage, author: item.author, category: item.category, tags: item.tags, publishedAt: item.publishedAt, createdAt: item.createdAt, seoTitle: item.seoTitle, metaDescription: item.metaDescription, canonicalUrl: item.canonicalUrl, ogTitle: item.ogTitle, ogDescription: item.ogDescription, ogImage: item.ogImage });
+module.exports = { pagination, slugify, text, requiredText, validUrl, stringArray, publicProduct, publicBlog };

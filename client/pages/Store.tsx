@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { PRODUCTS } from '../constants';
 import ProductCard from '../components/ProductCard';
 import { Category } from '../types';
+import { api } from '../api';
 
 const Store: React.FC = () => {
   const location = useLocation();
@@ -11,13 +11,17 @@ const Store: React.FC = () => {
   const initialCategory = queryParams.get('category') as Category | null;
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<Category | 'All'>(initialCategory || 'All');
   const [sortBy, setSortBy] = useState<'newest' | 'price-low' | 'price-high' | 'popularity'>('newest');
 
-  const categories: (Category | 'All')[] = ['All', 'Web Dev Projects', 'Landing Pages', 'Fun Websites', 'Creator Bundles'];
+  const categories: (Category | 'All')[] = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
+
+  useEffect(() => { api<{ items: any[] }>('/api/products?limit=100&sort=featured').then((data) => setProducts(data.items)).catch(() => setProducts([])).finally(() => setLoading(false)); }, []);
 
   const filteredProducts = useMemo(() => {
-    let result = PRODUCTS.filter(p => {
+    let result = products.filter(p => {
       const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             p.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory = activeCategory === 'All' || p.category === activeCategory;
@@ -39,7 +43,7 @@ const Store: React.FC = () => {
     }
 
     return result;
-  }, [searchQuery, activeCategory, sortBy]);
+  }, [products, searchQuery, activeCategory, sortBy]);
 
   return (
     <div className="pt-32 pb-24 min-h-screen">
@@ -91,7 +95,7 @@ const Store: React.FC = () => {
         </div>
 
         {/* Product Grid */}
-        {filteredProducts.length > 0 ? (
+        {loading ? <div className="text-center py-24 text-slate-400">Loading products…</div> : filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {filteredProducts.map(product => (
               <ProductCard key={product.id} product={product} />

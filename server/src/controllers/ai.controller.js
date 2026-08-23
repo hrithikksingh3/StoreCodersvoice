@@ -1,9 +1,9 @@
 const axios = require("axios");
-const productsData = require("../config/products");
-const products = Object.values(productsData);
+const Product = require('../models/Product');
 
 let aiRequestCount = 0;
 let aiWindowStart = Date.now();
+let googleCooldownUntil = 0;
 
 //nonesense detection
 function isLowQualityInput(message) {
@@ -25,13 +25,14 @@ function isLowQualityInput(message) {
 }
 
 //local faqs ai
-function handleStoreQuery(message) {
+async function handleStoreQuery(message) {
   const text = message.toLowerCase();
+  const products = await Product.find({ status: 'published' }, 'name slug price category tags').lean();
 
  // 🔹 Smart fuzzy product matching
 const matched = products.filter(product => {
   const nameWords = product.name.toLowerCase().split(" ");
-  const idWords = product.id.toLowerCase().split("-");
+  const idWords = product.slug.toLowerCase().split("-");
 
   return [...nameWords, ...idWords].some(word =>
     text.includes(word)
@@ -44,7 +45,7 @@ if (matched.length > 0) {
     message: "This project matches your interest 👇",
     products: matched.map(p => ({
       name: p.name,
-      slug: p.id,
+      slug: p.slug,
       price: p.price
     }))
   };
@@ -120,6 +121,8 @@ exports.chatWithAI = async (req, res) => {
   try {
     const { message, history } = req.body;
 
+    if (typeof message !== 'string' || message.trim().length > 1000 || (history && (!Array.isArray(history) || history.length > 8))) return res.status(400).json({ reply: 'Please send a short valid message.' });
+
     if (isLowQualityInput(message)) {
       return res.json({
         reply:
@@ -127,7 +130,7 @@ exports.chatWithAI = async (req, res) => {
       });
     }
 
-    const storeReply = handleStoreQuery(message);
+    const storeReply = await handleStoreQuery(message);
 
   if (storeReply) {
   if (typeof storeReply === "object") {
@@ -157,8 +160,6 @@ exports.chatWithAI = async (req, res) => {
     }
 
     aiRequestCount++;
-    console.log("Calling Gemini API...");
-
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -172,7 +173,7 @@ exports.chatWithAI = async (req, res) => {
             parts: [{ text: message }],
           },
         ],
-      },
+      }, { timeout: 12000 },
     );
 
     const reply = response.data.candidates[0].content.parts[0].text;

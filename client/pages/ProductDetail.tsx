@@ -1,11 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { PRODUCTS } from '../constants';
 import { Product } from '../types';
 import ProductCard from '../components/ProductCard';
 import { API_BASE_URL } from "../config";
 import toast from "react-hot-toast";
+import { api } from '../api';
 
 
 
@@ -25,19 +25,15 @@ const [showSuccessModal, setShowSuccessModal] = useState(false);
 
 
   useEffect(() => {
-    const found = PRODUCTS.find(p => p.slug === slug);
-    if (found) {
-      setProduct(found);
-      setActiveImage(found.thumbnail);
-      window.scrollTo(0, 0);
-    } else {
-      navigate('/store');
-    }
+    if (!slug) return;
+    api<{ item: Product }>(`/api/products/${encodeURIComponent(slug)}`).then(({ item }) => { setProduct(item); setActiveImage(item.thumbnail); window.scrollTo(0, 0); document.title = item.seoTitle || `${item.title} | CodersVoice`; }).catch(() => navigate('/store'));
   }, [slug, navigate]);
 
-  if (!product) return null;
+  const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
+  useEffect(() => { if (product) api<{ items: Product[] }>(`/api/products?category=${encodeURIComponent(product.category)}&limit=4`).then(({ items }) => setSimilarProducts(items.filter((item) => item.id !== product.id).slice(0, 3))).catch(() => setSimilarProducts([])); }, [product]);
+  useEffect(() => { if (!product) return; document.querySelector('meta[name="robots"]')?.setAttribute('content', 'index,follow'); return () => document.querySelector('meta[name="robots"]')?.setAttribute('content', 'index,follow'); }, [product]);
 
-  const similarProducts = PRODUCTS.filter(p => p.category === product.category && p.id !== product.id).slice(0, 3);
+  if (!product) return <div className="pt-32 text-center text-slate-400">Loading product…</div>;
 
   //handle buy now click
 
@@ -57,7 +53,7 @@ const confirmCheckout = async () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        productId: selectedProduct.slug,
+        productId: selectedProduct.id,
         email: email,
       }),
     });
@@ -96,7 +92,7 @@ setIsProcessing(false);
  setIsProcessing(false);
     if (result.success) {
         setShowSuccessModal(true);
-      toast.success("Payment successful! File has been sent to your email 🚀");
+      toast.success("Payment successful. Your delivery email is being prepared.");
     } else {
       toast.error("Payment verification failed ❌");
     }
@@ -311,7 +307,7 @@ setIsProcessing(false);
       </h2>
 
       <p className="text-slate-400 mb-6">
-        The source code has been sent to your email.
+        Your payment is confirmed. Your delivery email is now being prepared; please check your inbox shortly.
       </p>
 
       <button

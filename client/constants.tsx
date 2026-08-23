@@ -155,8 +155,8 @@ export const SERVICES: Service[] = [
   },
   {
     id: '3',
-    title: 'Video Editing Bundles',
-    description: 'Premium presets, templates, and asset packs for editors and social media creators.',
+    title: 'Video Editing & Editing Bundles',
+    description: 'Professional video editing for reels, shorts, YouTube, and brand content, plus ready-to-use presets, templates, and editing asset bundles.',
     icon: 'video'
   },
   {
@@ -164,6 +164,18 @@ export const SERVICES: Service[] = [
     title: 'AI Automation',
     description: 'Integrating AI workflows into your existing business to save time and scale faster.',
     icon: 'cpu'
+  },
+  {
+    id: '5',
+    title: 'Digital Marketing & SEO',
+    description: 'Grow discoverability and qualified traffic with practical SEO, content strategy, on-page optimisation, and digital marketing campaigns tailored to your goals.',
+    icon: 'marketing'
+  },
+  {
+    id: '6',
+    title: 'Custom Brochure & Pamphlet Design',
+    description: 'Get clear, brand-aligned brochures, pamphlets, flyers, and promotional designs that make your offer easy to understand and ready to share online or in print.',
+    icon: 'design'
   }
 ];
 

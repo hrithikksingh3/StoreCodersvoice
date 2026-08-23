@@ -162,6 +162,26 @@ const Contact: React.FC = () => {
                   </a>
                 </div>
               </div>
+
+              {/* WhatsApp */}
+              <div className="flex gap-6 items-center">
+                <div className="w-14 h-14 rounded-2xl glass border-green-500/20 flex items-center justify-center text-green-400 font-black text-sm">
+                  WA
+                </div>
+                <div>
+                  <h4 className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">
+                    WhatsApp
+                  </h4>
+                  <a
+                    href="https://wa.me/?text=Hi%20Hrithik%20(%40hrithik3)%2C%20I%20have%20a%20question%20about%20CodersVoice."
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-white font-bold text-lg hover:text-green-400 transition"
+                  >
+                    @hrithik3
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
 

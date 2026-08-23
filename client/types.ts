@@ -1,8 +1,9 @@
 
-export type Category = 'Web Dev Projects' | 'Landing Pages' | 'Fun Websites' | 'Creator Bundles';
+export type Category = string;
 
 export interface Product {
   id: string;
+  _id?: string;
   title: string;
   slug: string;
   category: Category;
@@ -15,6 +16,27 @@ export interface Product {
   galleryImages: string[];
   techStack: string[];
   createdAt: string;
+  status?: 'draft' | 'published' | 'hidden' | 'archived';
+  downloadUrl?: string;
+  featured?: boolean;
+  sortOrder?: number;
+}
+
+export interface BlogPost {
+  _id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  featuredImage?: string;
+  author: string;
+  category: string;
+  tags: string[];
+  status?: 'draft' | 'published' | 'archived';
+  publishedAt?: string;
+  createdAt: string;
+  seoTitle?: string;
+  metaDescription?: string;
 }
 
 export interface Testimonial {

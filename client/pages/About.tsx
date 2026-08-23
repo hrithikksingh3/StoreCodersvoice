@@ -33,7 +33,7 @@ const About: React.FC = () => {
           </div>
           <div className="relative">
              <div className="absolute inset-0 bg-purple-600/10 rounded-full blur-[100px]"></div>
-             <img src="https://picsum.photos/seed/road/800/1000" alt="Team" className="relative rounded-[40px] shadow-2xl grayscale hover:grayscale-0 transition-all duration-700" />
+             <img src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1200&q=85" alt="A team collaborating around a table" className="relative aspect-[4/5] w-full object-cover rounded-[40px] shadow-2xl grayscale hover:grayscale-0 transition-all duration-700" />
           </div>
         </div>
 

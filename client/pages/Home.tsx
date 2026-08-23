@@ -1,13 +1,17 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PRODUCTS, TESTIMONIALS, SERVICES, FAQS } from '../constants';
+import { TESTIMONIALS, SERVICES, FAQS } from '../constants';
 import ProductCard from '../components/ProductCard';
+import { Product } from '../types';
+import { api } from '../api';
 
 
 const Home: React.FC = () => {
-  const featuredProducts = PRODUCTS.slice(0, 3);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [activeFaqIndex, setActiveFaqIndex] = useState<number | null>(null);
+  useEffect(() => { api<{items: Product[]}>('/api/products?limit=100&sort=featured').then((data) => { setProducts(data.items); setFeaturedProducts(data.items.slice(0, 3)); }).catch(() => { setProducts([]); setFeaturedProducts([]); }); }, []);
 
   const toggleFaq = (index: number) => {
     setActiveFaqIndex(activeFaqIndex === index ? null : index);
@@ -95,7 +99,7 @@ const Home: React.FC = () => {
   { name: 'Fun Websites', icon: '✨', color: 'from-orange-600/20 to-yellow-500/20' },
   { name: 'Creator Bundles', icon: '📹', color: 'from-green-600/20 to-emerald-500/20' }
 ].map((cat, idx) => {
-  const count = PRODUCTS.filter((p) => p.category === cat.name).length;
+  const count = products.filter((p) => p.category === cat.name).length;
 
   return (
     <Link
@@ -156,7 +160,7 @@ const Home: React.FC = () => {
                 We don't just sell templates. Our team of expert developers and designers can build your dream project from scratch. From complex web apps to viral marketing tools.
               </p>
               <div className="space-y-6 mb-10">
-                {SERVICES.slice(0, 4).map(service => (
+                {SERVICES.map(service => (
                   <div key={service.id} className="flex gap-4">
                     <div className="flex-shrink-0 w-12 h-12 rounded-xl glass border-blue-500/20 flex items-center justify-center text-blue-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -177,9 +181,9 @@ const Home: React.FC = () => {
             <div className="relative">
               <div className="absolute inset-0 bg-blue-600/20 rounded-full blur-[80px]"></div>
               <img 
-                src="https://picsum.photos/seed/services/800/800" 
-                alt="Service" 
-                className="relative rounded-3xl glass border-white/10 shadow-2xl"
+                src="https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1400&q=85"
+                alt="Creative and technology team collaborating on a client project"
+                className="relative aspect-square w-full object-cover rounded-3xl glass border-white/10 shadow-2xl"
               />
             </div>
           </div>

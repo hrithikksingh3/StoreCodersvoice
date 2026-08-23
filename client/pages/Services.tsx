@@ -3,6 +3,15 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { SERVICES } from '../constants';
 
+const serviceIcons: Record<string, string> = {
+  code: '💻',
+  layout: '💹',
+  video: '🎥',
+  cpu: '🤖',
+  marketing: '📈',
+  design: '🎨',
+};
+
 const Services: React.FC = () => {
   return (
     <div className="pt-32 pb-24">
@@ -15,11 +24,11 @@ const Services: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-24">
-          {SERVICES.map((service, idx) => (
+          {SERVICES.map((service) => (
             <div key={service.id} className="glass p-12 rounded-[40px] border-white/5 group hover:neon-glow transition-all">
               <div className="w-16 h-16 rounded-2xl bg-blue-600/10 text-blue-400 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
                 <span className="text-3xl">
-                  {idx === 0 ? '💻' : idx === 1 ? '💹' : idx === 2 ? '🎥' : '🤖'}
+                  {serviceIcons[service.icon] || '✨'}
                 </span>
               </div>
               <h3 className="text-3xl font-black mb-4 text-white">{service.title}</h3>

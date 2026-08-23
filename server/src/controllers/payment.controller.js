@@ -1,8 +1,8 @@
 const crypto = require("crypto");
-const razorpay = require("../config/razorpay");
+const getRazorpay = require("../config/razorpay");
 const Order = require("../models/Order");
 const sendMail = require("../utils/sendMail");
-const PRODUCTS = require("../config/products");
+const Product = require("../models/Product");
 const generateInvoice = require("../utils/generateInvoice");
 const postPaymentActions = require("../utils/postPaymentActions");
 
@@ -13,30 +13,30 @@ const postPaymentActions = require("../utils/postPaymentActions");
 ================================ */
 exports.createOrder = async (req, res) => {
   try {
-    console.log("🔥 CREATE ORDER HIT");
-    console.log("👉 BODY:", req.body);
-
     const { productId, email } = req.body;
 
-    // 🛑 Validate product
-    if (!productId || !PRODUCTS[productId]) {
+    if (typeof productId !== 'string' || !productId || productId.length > 100) {
       return res.status(400).json({ message: "Invalid product selected" });
     }
 
-    if (!email) {
+    if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254) {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const product = PRODUCTS[productId];
+    // A product ID is preferred. Slug lookup keeps existing checkout links working.
+    const product = await Product.findOne({
+      status: 'published',
+      ...( /^[a-f\d]{24}$/i.test(productId) ? { _id: productId } : { slug: productId })
+    });
 
-    if (!product || !product.price || !product.downloadUrl) {
-      return res.status(400).json({ message: "Product not configured properly" });
+    if (!product || !product.downloadUrl) {
+      return res.status(404).json({ message: "This product is not available for purchase" });
     }
 
     const amountInPaise = product.price * 100;
 
     // 🔁 Create Razorpay order
-    const razorpayOrder = await razorpay.orders.create({
+    const razorpayOrder = await getRazorpay().orders.create({
       amount: amountInPaise,
       currency: "INR",
       receipt: `rcpt_${Date.now()}`
@@ -44,8 +44,9 @@ exports.createOrder = async (req, res) => {
 
     // 🧾 Save order snapshot in DB
     await Order.create({
-      email,
-      productId,
+      email: email.trim().toLowerCase(),
+      productId: String(product._id),
+      product: product._id,
       productName: product.name,
       amount: product.price,
       downloadUrl: product.downloadUrl, // ✅ snapshot
@@ -179,8 +180,6 @@ exports.createOrder = async (req, res) => {
 
 exports.verifyPayment = async (req, res) => {
   try {
-    console.log("🔐 VERIFY PAYMENT HIT");
-
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -202,25 +201,22 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "Invalid payment signature" });
     }
 
-    const order = await Order.findOneAndUpdate(
-      { razorpayOrderId: razorpay_order_id },
-      {
-        status: "paid",
-        razorpayPaymentId: razorpay_payment_id
-      },
-      { new: true }
-    );
+    const existingPayment = await Order.findOne({ razorpayPaymentId: razorpay_payment_id });
+    if (existingPayment && existingPayment.razorpayOrderId !== razorpay_order_id) return res.status(409).json({ message: 'Payment belongs to another order' });
+    const current = await Order.findOne({ razorpayOrderId: razorpay_order_id });
+    if (!current) return res.status(404).json({ message: "Order not found" });
+    if (current.status === 'paid') return res.json({ success: true, alreadyProcessed: true });
+    const order = await Order.findOneAndUpdate({ razorpayOrderId: razorpay_order_id, status: 'created' }, { status: 'paid', razorpayPaymentId: razorpay_payment_id, razorpaySignature: razorpay_signature }, { new: true });
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // ⚡ RESPOND FAST (IMPORTANT)
-    res.json({ success: true });
+    res.json({ success: true, fulfillmentStatus: 'processing' });
 
-    // 🔥 Fire-and-forget background task
-    process.nextTick(() => {
-      postPaymentActions(order);
+    // Delivery is asynchronous so an email-provider failure never invalidates a verified payment.
+    void postPaymentActions(order._id).catch((error) => {
+      console.error('Payment fulfillment failed:', error.message);
     });
 
   } catch (err) {

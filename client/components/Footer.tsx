@@ -167,6 +167,17 @@ const Footer: React.FC = () => {
           </div>
         </div>
 
+        <section className="mb-12 rounded-2xl border border-blue-500/25 bg-blue-500/10 px-5 py-4 sm:flex sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-300">CodersVoice Network</p>
+            <p className="mt-1 text-sm text-slate-400">Explore more from CodersVoice.</p>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3 sm:mt-0">
+            <a href="https://business.codersvoice.me" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-slate-100 transition hover:bg-blue-600">Visit Business <span aria-hidden="true">↗</span></a>
+            <a href="https://resources.codersvoice.me" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-slate-100 transition hover:bg-blue-600">Browse Resources <span aria-hidden="true">↗</span></a>
+          </div>
+        </section>
+
         <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center text-slate-500 text-xs">
           <p>© {new Date().getFullYear()} CodersVoice Store. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">

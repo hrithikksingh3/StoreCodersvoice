@@ -28,9 +28,10 @@ const orderSchema = new mongoose.Schema(
     razorpayOrderId: {
       type: String,
       required: true,
+      unique: true,
       index: true
     },
-    razorpayPaymentId: String,
+    razorpayPaymentId: { type: String, unique: true, sparse: true, index: true },
     razorpaySignature: String,
 
     // Customer
@@ -44,6 +45,7 @@ const orderSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
     productName: {
       type: String,
       required: true
@@ -62,9 +64,16 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["created", "paid", "failed"],
       default: "created"
-    }
+    },
+    fulfillmentStatus: { type: String, enum: ['pending', 'processing', 'delivered', 'failed'], default: 'pending' },
+    fulfillmentEmailId: { type: String, trim: true, index: true },
+    fulfillmentError: { type: String, trim: true, maxlength: 500 },
+    fulfillmentAttemptedAt: Date,
+    fulfilledAt: Date
   },
   { timestamps: true }
 );
+
+orderSchema.index({ email: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Order", orderSchema);

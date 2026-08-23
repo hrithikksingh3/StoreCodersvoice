@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -13,42 +13,47 @@ import FAQ from './pages/FAQ';
 import Policies from './pages/Policies';
 import AIAssistant from './components/AIAssistant';
 import { Toaster } from "react-hot-toast";
+import Blog from './pages/Blog';
+import BlogArticle from './pages/BlogArticle';
+import Admin from './pages/Admin';
 
+
+const AppRoutes: React.FC = () => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/');
+
+  if (isAdminRoute) return <Routes><Route path="/admin/*" element={<Admin />} /></Routes>;
+
+  return <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100">
+    <Navbar />
+    <main className="flex-grow">
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/store" element={<Store />} />
+        <Route path="/product/:slug" element={<ProductDetail />} />
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/blog/:slug" element={<BlogArticle />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/terms" element={<Policies />} />
+        <Route path="/privacy" element={<Policies />} />
+        <Route path="/refund" element={<Policies />} />
+      </Routes>
+      <AIAssistant />
+    </main>
+    <Footer />
+  </div>;
+};
 
 const App: React.FC = () => {
+  // Keep links shared from the previous hash-router release working.
+  if (window.location.hash.startsWith('#/')) window.history.replaceState(null, '', window.location.hash.slice(1));
   return (
     <Router>
-      <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100">
-        <Toaster
-  position="top-right"
-  toastOptions={{
-    style: {
-      background: "#0f172a",
-      color: "#fff",
-      border: "1px solid rgba(255,255,255,0.1)",
-    },
-  }}
-/>
-
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/store" element={<Store />} />
-            <Route path="/product/:slug" element={<ProductDetail />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/terms" element={<Policies />} />
-            <Route path="/privacy" element={<Policies />} />
-            <Route path="/refund" element={<Policies />} />
-          </Routes>
-          <AIAssistant />
-
-        </main>
-        <Footer />
-      </div>
+      <Toaster position="top-right" toastOptions={{ style: { background: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+      <AppRoutes />
     </Router>
   );
 };
