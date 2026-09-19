@@ -173,6 +173,7 @@ const Footer: React.FC = () => {
             <p className="mt-1 text-sm text-slate-400">Explore more from CodersVoice.</p>
           </div>
           <div className="mt-4 flex flex-wrap gap-3 sm:mt-0">
+            <a href="https://codersvoice.me" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">Visit Official Site <span aria-hidden="true">↗</span></a>
             <a href="https://business.codersvoice.me" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-slate-100 transition hover:bg-blue-600">Visit Business <span aria-hidden="true">↗</span></a>
             <a href="https://resources.codersvoice.me" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-slate-100 transition hover:bg-blue-600">Browse Resources <span aria-hidden="true">↗</span></a>
           </div>

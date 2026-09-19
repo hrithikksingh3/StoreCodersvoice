@@ -197,7 +197,9 @@ exports.verifyPayment = async (req, res) => {
       .update(payload)
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    const receivedBuffer = Buffer.from(String(razorpay_signature), 'utf8');
+    if (expectedBuffer.length !== receivedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)) {
       return res.status(400).json({ message: "Invalid payment signature" });
     }
 
@@ -205,7 +207,14 @@ exports.verifyPayment = async (req, res) => {
     if (existingPayment && existingPayment.razorpayOrderId !== razorpay_order_id) return res.status(409).json({ message: 'Payment belongs to another order' });
     const current = await Order.findOne({ razorpayOrderId: razorpay_order_id });
     if (!current) return res.status(404).json({ message: "Order not found" });
-    if (current.status === 'paid') return res.json({ success: true, alreadyProcessed: true });
+    if (current.status === 'paid') {
+      if (['pending', 'failed'].includes(current.fulfillmentStatus || 'pending')) {
+        void postPaymentActions(current._id, { retry: true }).catch((error) => {
+          console.error('Retrying payment fulfillment failed:', error.message);
+        });
+      }
+      return res.json({ success: true, alreadyProcessed: true, fulfillmentStatus: current.fulfillmentStatus || 'pending' });
+    }
     const order = await Order.findOneAndUpdate({ razorpayOrderId: razorpay_order_id, status: 'created' }, { status: 'paid', razorpayPaymentId: razorpay_payment_id, razorpaySignature: razorpay_signature }, { new: true });
 
     if (!order) {

@@ -17,7 +17,10 @@ const productSchema = new mongoose.Schema({
   tags: [{ type: String, trim: true, maxlength: 50 }],
   techStack: [{ type: String, trim: true, maxlength: 50 }],
   thumbnail: url,
-  galleryImages: [url],
+  galleryImages: {
+    type: [url],
+    validate: { validator: (value) => !value || value.length <= 5, message: 'Gallery images can contain at most 5 items' }
+  },
   demoUrl: url,
   downloadUrl: url,
   featured: { type: Boolean, default: false, index: true },

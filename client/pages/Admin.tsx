@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, setCsrfToken } from "../api";
+import { API_BASE_URL } from "../config";
 import toast from "react-hot-toast";
 
 type Item = Record<string, any>;
@@ -41,10 +42,11 @@ const blankBlog = {
 const listify = (value: unknown) =>
   typeof value === "string"
     ? value
-        .split(",")
+        .split(/[,\n]/)
         .map((item) => item.trim())
         .filter(Boolean)
     : value;
+const formatINR = (value: unknown) => `INR ${Number(value || 0).toLocaleString("en-IN")}`;
 const Icon = ({ name, size = 18 }: { name: string; size?: number }) => {
   const paths: Record<string, React.ReactNode> = {
     grid: (
@@ -202,6 +204,7 @@ const Admin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
   const [uploadingField, setUploadingField] = useState("");
+  const [downloadingReport, setDownloadingReport] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -392,6 +395,12 @@ const Admin: React.FC = () => {
       techStack: listify(editing.techStack),
       galleryImages: listify(editing.galleryImages),
     };
+    if (view === "products" && Array.isArray(prepared.galleryImages) && prepared.galleryImages.some((url) => !/^https:\/\/res\.cloudinary\.com\//i.test(String(url)))) {
+      const message = "Import every gallery URL to Cloudinary before saving the product.";
+      setEditorError(message);
+      reportError(message);
+      return;
+    }
     const payload = Object.fromEntries(
       Object.entries(prepared).filter(
         ([key, value]) =>
@@ -439,11 +448,12 @@ const Admin: React.FC = () => {
           : actionName === "archive"
             ? `/api/admin/${kind}/${id}`
             : `/api/admin/${kind}/${id}/status`;
+      const status = actionName === "publish" ? "published" : actionName;
       await api(endpoint, {
         method: actionName === "archive" ? "DELETE" : "POST",
         body: ["duplicate", "archive"].includes(actionName)
           ? undefined
-          : JSON.stringify({ status: actionName }),
+          : JSON.stringify({ status }),
       });
       const entity = view === "products" ? "Product" : "Article";
       const messages: Record<Action, string> = {
@@ -472,6 +482,46 @@ const Admin: React.FC = () => {
       reportError(error.message || "Unable to resend the delivery email.");
     } finally {
       setPendingAction("");
+    }
+  };
+  const downloadReport = async (scope: "products" | "orders" | "dashboard", format: "pdf" | "xlsx") => {
+    const key = `${scope}:${format}`;
+    if (downloadingReport) return;
+    setDownloadingReport(key);
+    try {
+      const params = new URLSearchParams({ format });
+      if (scope === "products") {
+        if (query) params.set("q", query);
+        if (statusFilter) params.set("status", statusFilter);
+        if (categoryFilter) params.set("category", categoryFilter);
+      }
+      if (scope === "orders") {
+        if (query) params.set("q", query);
+        if (statusFilter) params.set("status", statusFilter);
+      }
+      if (dateFrom) params.set("from", dateFrom);
+      if (dateTo) params.set("to", dateTo);
+      const response = await fetch(`${API_BASE_URL}/api/admin/reports/${scope}?${params.toString()}`, { credentials: "include" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: "Unable to generate the report." }));
+        throw new Error(error.message || "Unable to generate the report.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const disposition = response.headers.get("content-disposition") || "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `codersvoice-${scope}-report.${format}`;
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      announce(`${format.toUpperCase()} report downloaded.`);
+    } catch (error: any) {
+      reportError(error.message || "Unable to download the report.");
+    } finally {
+      setDownloadingReport("");
     }
   };
   const field = (key: string, label: string, type = "text", required = false) => (
@@ -517,6 +567,90 @@ const Admin: React.FC = () => {
     } finally {
       setUploadingField("");
     }
+  };
+  const galleryItems = () => Array.isArray(editing?.galleryImages) ? editing!.galleryImages.filter(Boolean) : (listify(editing?.galleryImages || "") as string[]);
+  const uploadGalleryImages = async (files: File[]) => {
+    if (!editing || !files.length || uploadingField) return;
+    const current = galleryItems();
+    if (current.length + files.length > 5) {
+      const message = `A gallery can contain up to 5 images. Remove an image or choose at most ${Math.max(0, 5 - current.length)} more.`;
+      setEditorError(message);
+      reportError(message);
+      return;
+    }
+    setUploadingField("galleryImages");
+    setEditorError("");
+    try {
+      const uploaded: string[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.append("kind", "products");
+        form.append("file", file);
+        const response = await api<{ item: { url: string } }>("/api/admin/uploads/images", { method: "POST", body: form });
+        uploaded.push(response.item.url);
+      }
+      setEditing({ ...editing, galleryImages: [...current, ...uploaded].join(", ") });
+      announce(`${uploaded.length} gallery image${uploaded.length === 1 ? "" : "s"} saved to Cloudinary.`);
+    } catch (error: any) {
+      const message = error.message || "Gallery upload failed.";
+      setEditorError(message);
+      reportError(message);
+    } finally {
+      setUploadingField("");
+    }
+  };
+  const importGalleryUrls = async () => {
+    if (!editing || uploadingField) return;
+    const current = galleryItems();
+    if (current.length > 5) {
+      const message = "A gallery can contain up to 5 images.";
+      setEditorError(message);
+      reportError(message);
+      return;
+    }
+    const remoteUrls = current.filter((url) => /^https?:\/\//i.test(url) && !/^https:\/\/res\.cloudinary\.com\//i.test(url));
+    if (!remoteUrls.length) {
+      reportError("Paste one or more external image URLs first.");
+      return;
+    }
+    setUploadingField("galleryImages");
+    setEditorError("");
+    try {
+      const stored = current.filter((url) => /^https:\/\/res\.cloudinary\.com\//i.test(url));
+      for (const sourceUrl of remoteUrls) {
+        const form = new FormData();
+        form.append("kind", "products");
+        form.append("sourceUrl", sourceUrl);
+        const response = await api<{ item: { url: string } }>("/api/admin/uploads/images", { method: "POST", body: form });
+        stored.push(response.item.url);
+      }
+      setEditing({ ...editing, galleryImages: stored.join(", ") });
+      announce(`${remoteUrls.length} gallery image${remoteUrls.length === 1 ? "" : "s"} imported to Cloudinary.`);
+    } catch (error: any) {
+      const message = error.message || "Could not import the gallery image URLs.";
+      setEditorError(message);
+      reportError(message);
+    } finally {
+      setUploadingField("");
+    }
+  };
+  const galleryField = () => {
+    const images = galleryItems();
+    return <div className="md:col-span-2 rounded-xl border border-slate-700 bg-slate-950/40 p-3">
+      <label className="block text-sm font-medium text-slate-300">Gallery images <span className="text-slate-500">(up to 5)</span>
+        <textarea value={editing?.galleryImages ?? ""} onChange={(event) => setEditing({ ...editing!, galleryImages: event.target.value })} placeholder="Paste image URLs separated by commas or new lines, then import them" className="mt-1.5 min-h-20 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none transition focus:border-blue-500" />
+      </label>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label className={`cursor-pointer rounded-lg border border-slate-600 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-blue-400 hover:text-white ${uploadingField === "galleryImages" ? "pointer-events-none opacity-50" : ""}`}>
+          {uploadingField === "galleryImages" ? "Uploading…" : "Upload images from computer"}
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" className="sr-only" onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length) uploadGalleryImages(files); event.currentTarget.value = ""; }} />
+        </label>
+        <button type="button" disabled={uploadingField === "galleryImages"} onClick={importGalleryUrls} className="rounded-lg border border-blue-500/50 px-3 py-2 text-xs font-bold text-blue-300 transition hover:bg-blue-500/10 disabled:opacity-50">Import pasted URLs to Cloudinary</button>
+        <span className="text-xs text-slate-500">{images.length}/5 images</span>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">Use local uploads or pasted URLs. Each saved image is stored in Cloudinary and shown publicly only after the product is unhidden.</p>
+      {images.length > 0 && <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">{images.map((url, index) => <div key={`${url}-${index}`} className="group relative overflow-hidden rounded-lg border border-slate-700"><img src={url} alt={`Gallery image ${index + 1}`} className="h-20 w-full object-cover" /><button type="button" onClick={() => setEditing({ ...editing!, galleryImages: images.filter((_: string, itemIndex: number) => itemIndex !== index).join(", ") })} className="absolute right-1 top-1 rounded bg-slate-950/85 px-1.5 py-1 text-xs text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Remove gallery image ${index + 1}`}>×</button></div>)}</div>}
+    </div>;
   };
   const imageField = (key: string, label: string, required = false) => (
     <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
@@ -621,6 +755,18 @@ const Admin: React.FC = () => {
     );
 
   const recordView = view === "products" || view === "blogs";
+  const dashboardTrend = Array.isArray(stats.salesTrend) ? stats.salesTrend : [];
+  const dashboardRecentOrders = Array.isArray(stats.recentOrders) ? stats.recentOrders : [];
+  const maxTrendRevenue = Math.max(1, ...dashboardTrend.map((day: Item) => Number(day.revenue || 0)));
+  const delivery = stats.fulfillment || {};
+  const deliveryTotal = Number(delivery.delivered || 0) + Number(delivery.failed || 0) + Number(delivery.processing || 0) + Number(delivery.pending || 0);
+  const deliveryRate = deliveryTotal ? Math.round((Number(delivery.delivered || 0) / deliveryTotal) * 100) : 0;
+  const dashboardCards = [
+    { label: "Paid revenue", value: formatINR(stats.revenue), note: "Confirmed payments", icon: "receipt", tone: "text-cyan-300 bg-cyan-400/10 border-cyan-400/20" },
+    { label: "Paid orders", value: String(stats.paidOrders || 0), note: `${stats.orders || 0} total orders`, icon: "check", tone: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20" },
+    { label: "Delivery health", value: `${deliveryRate}%`, note: `${delivery.failed || 0} delivery issue${Number(delivery.failed || 0) === 1 ? "" : "s"}`, icon: "clock", tone: "text-amber-300 bg-amber-400/10 border-amber-400/20" },
+    { label: "Visible products", value: String(stats.productVisibility?.published || 0), note: `${stats.productVisibility?.hidden || 0} hidden in admin`, icon: "box", tone: "text-blue-300 bg-blue-400/10 border-blue-400/20" },
+  ];
   return (
     <main className="min-h-screen bg-[#020617] text-slate-100 md:flex">
       <aside className="hidden min-h-screen w-64 shrink-0 border-r border-slate-800 bg-slate-950 p-5 md:flex md:flex-col">
@@ -661,15 +807,23 @@ const Admin: React.FC = () => {
                 {view === "audit" ? "Audit logs" : view}
               </h1>
             </div>
-            {recordView && (
-              <button
-                onClick={openCreate}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold shadow-lg shadow-blue-900/30 hover:bg-blue-500"
-              >
-                <Icon name="plus" size={17} />
-                New {view === "products" ? "product" : "article"}
-              </button>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {(["dashboard", "products", "orders"] as View[]).includes(view) && (
+                <>
+                  <button type="button" disabled={Boolean(downloadingReport)} onClick={() => downloadReport(view as "dashboard" | "products" | "orders", "pdf")} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-red-400 hover:text-white disabled:opacity-50">{downloadingReport === `${view}:pdf` ? "Preparing…" : "Export PDF"}</button>
+                  <button type="button" disabled={Boolean(downloadingReport)} onClick={() => downloadReport(view as "dashboard" | "products" | "orders", "xlsx")} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-emerald-400 hover:text-white disabled:opacity-50">{downloadingReport === `${view}:xlsx` ? "Preparing…" : "Export Excel"}</button>
+                </>
+              )}
+              {recordView && (
+                <button
+                  onClick={openCreate}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold shadow-lg shadow-blue-900/30 hover:bg-blue-500"
+                >
+                  <Icon name="plus" size={17} />
+                  New {view === "products" ? "product" : "article"}
+                </button>
+              )}
+            </div>
           </div>
           <select
             value={view}
@@ -685,18 +839,52 @@ const Admin: React.FC = () => {
         </header>
         <div className="p-5 md:p-9">
           {view === "dashboard" && (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {Object.entries(stats).map(([key, value]) => (
-                <div
-                  key={key}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5"
-                >
-                  <p className="text-sm capitalize text-slate-400">
-                    {key.replace(/([A-Z])/g, " $1")}
-                  </p>
-                  <p className="mt-3 text-3xl font-black">{String(value)}</p>
+            <div className="space-y-6">
+              <section className="overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-600/20 via-slate-900 to-slate-900 p-6 md:p-7">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Store command centre</p>
+                    <h2 className="mt-2 text-2xl font-black text-white md:text-3xl">Everything important, at a glance.</h2>
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">Track revenue, product visibility, payment delivery and recent customer orders from one place.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => changeView("products")} className="rounded-xl border border-blue-300/25 bg-slate-950/50 px-4 py-2.5 text-sm font-bold text-blue-200 transition hover:bg-blue-500 hover:text-white">Manage products</button>
+                    <button type="button" onClick={() => changeView("orders")} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-900/40 transition hover:bg-blue-500">Review orders</button>
+                  </div>
                 </div>
-              ))}
+              </section>
+
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {dashboardCards.map((card) => (
+                  <div key={card.label} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg shadow-slate-950/20">
+                    <div className="flex items-start justify-between gap-4">
+                      <div><p className="text-sm font-medium text-slate-400">{card.label}</p><p className="mt-3 text-2xl font-black text-white md:text-3xl">{card.value}</p></div>
+                      <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border ${card.tone}`}><Icon name={card.icon} size={18} /></span>
+                    </div>
+                    <p className="mt-4 text-xs text-slate-500">{card.note}</p>
+                  </div>
+                ))}
+              </section>
+
+              <section className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 md:p-6">
+                  <div className="flex items-start justify-between gap-4"><div><h2 className="font-bold text-white">Paid revenue</h2><p className="mt-1 text-sm text-slate-500">Last 7 days</p></div><p className="text-right text-lg font-black text-cyan-300">{formatINR(dashboardTrend.reduce((sum: number, day: Item) => sum + Number(day.revenue || 0), 0))}</p></div>
+                  <div className="mt-8 flex h-48 items-end gap-2 sm:gap-4">
+                    {dashboardTrend.map((day: Item) => <div key={day.date} className="flex h-full min-w-0 flex-1 flex-col justify-end"><div className="group relative rounded-t-lg bg-gradient-to-t from-blue-600 to-cyan-400 transition hover:from-blue-500 hover:to-cyan-300" style={{ height: `${Math.max(5, Math.round((Number(day.revenue || 0) / maxTrendRevenue) * 100))}%` }} title={`${day.label}: ${formatINR(day.revenue)}`}><span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-bold text-white shadow-lg group-hover:block">{formatINR(day.revenue)}</span></div><p className="mt-3 text-center text-xs text-slate-500">{day.label}</p></div>)}
+                    {!dashboardTrend.length && <p className="m-auto text-sm text-slate-500">No paid sales recorded in the last 7 days.</p>}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 md:p-6">
+                  <div className="flex items-start justify-between"><div><h2 className="font-bold text-white">Fulfilment health</h2><p className="mt-1 text-sm text-slate-500">Delivery email status</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${Number(delivery.failed || 0) ? "bg-red-500/15 text-red-300" : "bg-emerald-500/15 text-emerald-300"}`}>{Number(delivery.failed || 0) ? "Needs attention" : "Healthy"}</span></div>
+                  <div className="mt-7"><div className="flex items-end justify-between"><p className="text-4xl font-black text-white">{deliveryRate}%</p><p className="text-xs text-slate-500">delivered</p></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${deliveryRate}%` }} /></div></div>
+                  <div className="mt-7 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-950/70 p-3"><p className="text-slate-500">Delivered</p><p className="mt-1 font-bold text-emerald-300">{delivery.delivered || 0}</p></div><div className="rounded-xl bg-slate-950/70 p-3"><p className="text-slate-500">Failed</p><p className="mt-1 font-bold text-red-300">{delivery.failed || 0}</p></div><div className="rounded-xl bg-slate-950/70 p-3"><p className="text-slate-500">Pending</p><p className="mt-1 font-bold text-amber-300">{delivery.pending || 0}</p></div><div className="rounded-xl bg-slate-950/70 p-3"><p className="text-slate-500">Processing</p><p className="mt-1 font-bold text-blue-300">{delivery.processing || 0}</p></div></div>
+                </div>
+              </section>
+
+              <section className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60"><div className="flex items-center justify-between border-b border-slate-800 px-5 py-4"><div><h2 className="font-bold text-white">Recent orders</h2><p className="mt-1 text-sm text-slate-500">Latest checkout activity</p></div><button type="button" onClick={() => changeView("orders")} className="text-sm font-bold text-blue-300 hover:text-blue-200">View all</button></div><div className="divide-y divide-slate-800">{dashboardRecentOrders.map((order: Item) => <div key={order._id} className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate font-semibold text-slate-100">{order.productName}</p><p className="mt-1 truncate text-xs text-slate-500">{order.email}</p></div><div className="flex items-center justify-between gap-4 sm:justify-end"><p className="font-bold text-slate-100">{formatINR(order.amount)}</p><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${order.status === "paid" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-400/15 text-amber-300"}`}>{order.status}</span></div></div>)}{!dashboardRecentOrders.length && <p className="p-8 text-center text-sm text-slate-500">No orders have been recorded yet.</p>}</div></div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"><h2 className="font-bold text-white">Store content</h2><p className="mt-1 text-sm text-slate-500">Public catalogue readiness</p><div className="mt-6 space-y-4"><div><div className="flex justify-between text-sm"><span className="text-slate-400">Products</span><span className="font-bold text-white">{stats.products || 0}</span></div><div className="mt-2 h-2 rounded-full bg-slate-800"><div className="h-full rounded-full bg-blue-500" style={{ width: `${stats.products ? Math.round(((stats.productVisibility?.published || 0) / stats.products) * 100) : 0}%` }} /></div><p className="mt-2 text-xs text-slate-500">{stats.productVisibility?.published || 0} visible, {stats.productVisibility?.hidden || 0} hidden</p></div><div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4"><p className="text-sm text-slate-400">Blog articles</p><p className="mt-2 text-2xl font-black text-white">{stats.blogs || 0}</p><button type="button" onClick={() => changeView("blogs")} className="mt-3 text-sm font-bold text-blue-300 hover:text-blue-200">Manage blog</button></div></div></div>
+              </section>
             </div>
           )}
           {tableView && (
@@ -1031,7 +1219,7 @@ const Admin: React.FC = () => {
                   {field("demoUrl", "Demo URL")}
                   {field("tags", "Tags (comma separated)")}
                   {field("techStack", "Tech stack (comma separated)")}
-                  {field("galleryImages", "Gallery URLs (comma separated)")}
+                  {galleryField()}
                 </>
               ) : (
                 <>
