@@ -6,11 +6,16 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "migrate:products": "node scripts/migrate-products.js"
+    "migrate:products": "node scripts/migrate-products.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "overrides": {
+    "htmlparser2": "10.0.0"
   },
   "dependencies": {
-    "@google/genai": "^1.41.0",
-    "@google/generative-ai": "^0.24.1",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.1",

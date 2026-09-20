@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const { text } = require('../utils/content');
 
 const COLORS = { navy: '#081225', ink: '#13213d', blue: '#2563eb', cyan: '#06b6d4', muted: '#64748b', line: '#dbe4f0', pale: '#f5f9ff', green: '#047857', amber: '#b45309', red: '#b91c1c' };
+const REPORT_RECORD_LIMIT = 5000;
 const SOCIAL_LINKS = [
   { label: 'Website', url: 'https://codersvoice.me' },
   { label: 'LinkedIn', url: 'https://www.linkedin.com/company/codersvoice/' },
@@ -197,12 +198,13 @@ function sendReport(req, res, next, payload) {
   const format = String(req.query.format || '').toLowerCase();
   if (!['pdf', 'xlsx'].includes(format)) return res.status(400).json({ success: false, message: 'Choose PDF or Excel for this report.' });
   const subtitle = `${payload.rows.length} records · Generated ${new Date().toLocaleString('en-IN')}`;
+  if (payload.rows.length === REPORT_RECORD_LIMIT) res.setHeader('X-Report-Record-Limit', String(REPORT_RECORD_LIMIT));
   if (format === 'pdf') return createPdf(res, payload.title, subtitle, payload.filters, payload.metrics, payload.columns, payload.rows);
   return createWorkbook(res, payload.title, payload.filters, payload.metrics, payload.columns, payload.rows).catch(next);
 }
 
 exports.products = async (req, res, next) => { try {
-  const items = await Product.find(productQuery(req.query)).sort({ updatedAt: -1 }).lean();
+  const items = await Product.find(productQuery(req.query)).sort({ updatedAt: -1 }).limit(REPORT_RECORD_LIMIT).lean();
   const rows = items.map((item) => ({ name: item.name, category: item.category, price: money(item.price), status: item.status, updated: dateText(item.updatedAt) }));
   return sendReport(req, res, next, {
     title: 'Products report', filters: reportFilters(req.query, [['Search', 'q'], ['Status', 'status'], ['Category', 'category'], ['From', 'from'], ['To', 'to']]),
@@ -212,7 +214,7 @@ exports.products = async (req, res, next) => { try {
 } catch (error) { next(error); } };
 
 exports.orders = async (req, res, next) => { try {
-  const items = await Order.find(orderQuery(req.query)).sort({ createdAt: -1 }).lean();
+  const items = await Order.find(orderQuery(req.query)).sort({ createdAt: -1 }).limit(REPORT_RECORD_LIMIT).lean();
   const revenue = items.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const rows = items.map((item) => ({ product: item.productName, customer: item.email, amount: money(item.amount), payment: item.status, delivery: item.fulfillmentStatus || 'not tracked', created: dateText(item.createdAt) }));
   return sendReport(req, res, next, {
@@ -223,7 +225,7 @@ exports.orders = async (req, res, next) => { try {
 } catch (error) { next(error); } };
 
 exports.dashboard = async (req, res, next) => { try {
-  const orders = await Order.find(orderQuery(req.query)).sort({ createdAt: -1 }).lean();
+  const orders = await Order.find(orderQuery(req.query)).sort({ createdAt: -1 }).limit(REPORT_RECORD_LIMIT).lean();
   const [products, visibleProducts, blogs] = await Promise.all([Product.countDocuments(), Product.countDocuments({ status: 'published' }), require('../models/BlogPost').countDocuments()]);
   const paid = orders.filter((item) => item.status === 'paid');
   const revenue = paid.reduce((sum, item) => sum + Number(item.amount || 0), 0);

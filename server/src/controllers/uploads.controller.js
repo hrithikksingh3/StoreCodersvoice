@@ -1,8 +1,7 @@
 const { cloudinary, assertConfigured } = require('../config/cloudinary');
+const { assertImageBuffer, assertSafeRemoteImageUrl } = require('../utils/image-security');
 
 const allowedKinds = new Set(['products', 'blogs']);
-const isRemoteImageUrl = (value) => /^https?:\/\//i.test(String(value || '').trim());
-
 const uploadBuffer = (buffer, folder) => new Promise((resolve, reject) => {
   const stream = cloudinary.uploader.upload_stream(
     {
@@ -25,17 +24,19 @@ exports.uploadImage = async (req, res, next) => {
     let result;
 
     if (req.file) {
+      assertImageBuffer(req.file.buffer);
       result = await uploadBuffer(req.file.buffer, folder);
-    } else if (isRemoteImageUrl(sourceUrl)) {
+    } else if (sourceUrl) {
+      const safeUrl = await assertSafeRemoteImageUrl(sourceUrl);
       // Cloudinary fetches the remote image itself and stores the resulting asset.
-      result = await cloudinary.uploader.upload(sourceUrl, {
+      result = await cloudinary.uploader.upload(safeUrl, {
         folder,
         resource_type: 'image',
         allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'],
         transformation: [{ quality: 'auto', fetch_format: 'auto' }],
       });
     } else {
-      return res.status(400).json({ success: false, message: 'Choose an image file or provide a valid http(s) image URL.' });
+      return res.status(400).json({ success: false, message: 'Choose an image file or provide a valid HTTPS image URL.' });
     }
 
     res.status(201).json({

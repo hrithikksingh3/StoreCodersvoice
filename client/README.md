@@ -1,5 +1,7 @@
 # 🚀 CodersVoice Store — Digital Products Marketplace
 
+> **Current implementation notice:** products, blogs, checkout, media uploads, and the admin portal are API/database managed. Do not edit `constants.tsx` or add SuperProfile links for live catalogue changes. Use `/admin` and the root [deployment guide](../DEPLOYMENT_ENVIRONMENT_GUIDE.md). The static-catalogue examples below are legacy reference material.
+
 A premium **dark-themed digital products storefront** for **CodersVoice**, built to showcase and sell downloadable resources like:
 
 ✅ Web Dev Projects

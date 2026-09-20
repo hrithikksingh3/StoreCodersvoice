@@ -1,10 +1,14 @@
 # CodersVoice Store 2.0
 
-React/Vite public storefront and Express/MongoDB API for database-managed products, blogs, orders, and administration.
+React/Vite storefront and Express/MongoDB API with Razorpay checkout, Cloudinary product media, Resend delivery emails, and an authenticated admin portal.
+
+## Deployment guide
+
+Use [DEPLOYMENT_ENVIRONMENT_GUIDE.md](DEPLOYMENT_ENVIRONMENT_GUIDE.md) as the authoritative production checklist and environment-variable matrix. Use [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) for the current hardening scope, verification results, and remaining operational checks.
 
 ## Local setup
 
-1. Copy `server/.env.example` to `server/.env` and fill in non-placeholder values. Copy `client/.env.example` if the API is not running at localhost:5000.
+1. Copy `server/.env.example` to `server/.env` and fill in non-placeholder values. Copy `client/.env.example` if the API is not running at localhost:5000. Keep every secret server-only.
 2. Run `npm install` in both `client` and `server`.
 3. Before the first 2.0 deployment, run `npm run migrate:products` in `server`. It is idempotent and imports the legacy catalogue without touching orders.
 4. Start the API with `npm run dev` in `server` and the UI with `npm run dev` in `client`.
@@ -21,4 +25,4 @@ Admin authentication uses HTTP-only, SameSite cookies plus a CSRF token. Keep `J
 
 ## Deployment
 
-Set explicit `FRONTEND_URL`, `PUBLIC_API_URL`, and `PUBLIC_SITE_URL` in production. The client includes SPA fallback rules for Vercel and Netlify. Serve `robots.txt` and `sitemap.xml` from the API/reverse-proxy at the public domain so their URLs resolve to the API implementation.
+Set explicit `FRONTEND_URL`, `PUBLIC_API_URL`, and `PUBLIC_SITE_URL` in production. The client includes SPA fallback rules for Vercel and Netlify. Serve `robots.txt` and `sitemap.xml` from the API/reverse-proxy at the public domain so their URLs resolve to the API implementation. Use Node.js 22.12 or newer for the API.

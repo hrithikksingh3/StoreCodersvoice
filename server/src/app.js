@@ -7,12 +7,15 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
-//for site security
 const helmet = require("helmet");
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], baseUri: ["'none'"], frameAncestors: ["'none'"], formAction: ["'none'"] } },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 
-const origins = (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:3000').split(',').map((value) => value.trim());
+const origins = (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:3000').split(',').map((value) => value.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, callback) { if (!origin || origins.includes(origin)) return callback(null, true); return callback(new Error('Origin is not allowed by CORS')); },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -23,6 +26,8 @@ app.use(express.json({ limit: '200kb' }));
 app.use(cookieParser());
 app.set('trust proxy', 1);
 app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }));
+const downloadLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many download requests. Please try again later.' } });
+const reportLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many report requests. Please try again later.' } });
 
 app.get('/', (req, res) => {
   res.send('CodersVoice Backend API Running');
@@ -38,12 +43,12 @@ const orders = require('./controllers/orders.controller');
 const reports = require('./controllers/reports.controller');
 const { requireAdmin } = require('./middleware/auth');
 const meta = require('./controllers/admin-meta.controller');
-app.get('/api/orders/:id/download', orders.download);
+app.get('/api/orders/:id/download', downloadLimit, orders.download);
 app.get('/api/admin/orders', requireAdmin, orders.listAdmin);
 app.post('/api/admin/orders/:id/resend-email', requireAdmin, require('./middleware/auth').requireCsrf, orders.resendEmail);
-app.get('/api/admin/reports/products', requireAdmin, reports.products);
-app.get('/api/admin/reports/orders', requireAdmin, reports.orders);
-app.get('/api/admin/reports/dashboard', requireAdmin, reports.dashboard);
+app.get('/api/admin/reports/products', requireAdmin, reportLimit, reports.products);
+app.get('/api/admin/reports/orders', requireAdmin, reportLimit, reports.orders);
+app.get('/api/admin/reports/dashboard', requireAdmin, reportLimit, reports.dashboard);
 app.get('/api/admin/dashboard', requireAdmin, meta.dashboard);
 app.get('/api/admin/audit-logs', requireAdmin, meta.auditLogs);
 app.get('/api/admin/settings', requireAdmin, meta.getSettings);
