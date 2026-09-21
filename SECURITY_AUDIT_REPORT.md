@@ -1,13 +1,13 @@
 # CodersVoice Store security audit report
 
-Audit date: 2026-09-20  
+Audit date: 2026-09-21
 Scope: local repository only. No production systems were accessed, changed, or scanned.
 
 ## Executive summary
 
 The application has a sensible baseline for an internet-facing store: HTTPS-only production configuration, authenticated admin endpoints, HttpOnly SameSite session cookies, CSRF checks on admin mutations, server-side payment price lookup, Razorpay signature verification, rate limits, and HTML sanitisation for blog content.
 
-This audit added validation around image uploads and remote image imports, tighter upload parser limits, content-security headers on the API, production startup validation, report/download rate limits, bounded report queries, dependency updates, and regression tests. The known residual dependency finding is documented below.
+This audit added validation around image uploads and remote image imports, tighter upload parser limits, content-security headers on the API, production startup validation, report/download rate limits, bounded report queries, protected retention controls, revenue-share snapshots, dependency updates, and regression tests. The known residual dependency finding is documented below.
 
 ## Architecture and attack surface
 
@@ -20,6 +20,8 @@ This audit added validation around image uploads and remote image imports, tight
 | Admin portal/API | Authenticated | JWT HttpOnly cookie, session version, SameSite cookies, CSRF token on mutations, audit logs |
 | Admin image upload | Authenticated | CSRF, size/part limits, MIME allowlist, file-signature validation, Cloudinary-only storage |
 | Reports | Authenticated | Rate limit, filtered queries, 5,000 record cap |
+| Revenue Analytics | Authenticated | Paid-order-only calculations, product selection validation, 5,000-order cap, immutable sale-time ownership-share snapshot |
+| Data management | Authenticated | CSRF, dedicated rate limit, allowlist limited to orders/audit logs, retention floors, typed confirmation, 10,000-record batch cap |
 
 ## Changes made in this audit
 
@@ -34,15 +36,21 @@ This audit added validation around image uploads and remote image imports, tight
 6. Removed two unused Google SDKs. The AI route uses its existing Axios integration, so removing the unused SDKs also removed the prior critical protobuf dependency chain.
 7. Applied non-breaking npm dependency fixes, updated the supported Node requirement to `>=22.12.0`, and added a compatible `htmlparser2` resolution needed by `sanitize-html` in the CommonJS backend.
 8. Added `server/test/image-security.test.js` and `npm test` for upload-signature and network-address regression coverage.
+9. Added protected Admin → Data management controls. The API does not expose products, posts, settings, or payment configuration as purge targets; it always retains the latest 7 audit-log days and 30 order days, recomputes eligibility at deletion time, requires an exact live-count confirmation, and logs completed purges.
+10. Added Revenue Analytics and PDF/Excel reporting for paid orders. Each new order snapshots the product's `ownerSharePercent`, preserving the correct partner split if the product setting changes later. Historical orders use a labelled current-product/fallback calculation because no previous split exists in the stored order.
+11. Added pre-delete data exports and a database-capacity estimate. A cleanup cannot be confirmed until its server-validated batch has been downloaded as NDJSON or Excel. Exports deliberately omit Razorpay signatures and private download URLs; the capacity meter is clearly marked as an Atlas-estimate rather than an authoritative billing value.
 
 ## Verification performed
 
 | Check | Result |
 | --- | --- |
-| Backend security regression tests | Passed: 3 tests |
-| Backend module-load check | Passed |
-| Frontend production build | Passed before this audit; rerun before deployment after any frontend change |
-| Backend dependency audit after fixes | 2 moderate findings remain, both from ExcelJS’ transitive `uuid` dependency |
+| Backend regression tests | Passed: 5 tests |
+| Revenue/retention validation tests | Passed locally; no destructive database purge was run |
+| Backend module-load and production environment validation | Passed with non-secret placeholder values |
+| Frontend TypeScript validation and production build | Passed on 2026-09-21 |
+| Installed production dependency trees | Passed for frontend and backend (`npm ls --omit=dev`) |
+| Fresh npm audit | Not completed: this environment could not resolve `registry.npmjs.org`; rerun in the deployment/network environment |
+| Last successful backend dependency audit after fixes | 2 moderate findings remain, both from ExcelJS’ transitive `uuid` dependency |
 | Current tracked secret-file check | Only `.env.example` files are currently tracked |
 
 ## Dependency audit remaining finding

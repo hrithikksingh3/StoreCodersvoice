@@ -1,7 +1,7 @@
 const Product = require('../models/Product');
 const { pagination, slugify, text, requiredText, validUrl, stringArray, publicProduct } = require('../utils/content');
 const audit = require('../utils/audit');
-const fields = ['name', 'slug', 'shortDescription', 'description', 'price', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
+const fields = ['name', 'slug', 'shortDescription', 'description', 'price', 'ownerSharePercent', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
 const allowedStatuses = ['draft', 'published', 'hidden', 'archived'];
 
 function validate(input, publishing = false) {
@@ -11,6 +11,7 @@ function validate(input, publishing = false) {
   if (Object.hasOwn(value, 'name') && !requiredText(value.name, 160)) errors.push('Name is required and must be at most 160 characters');
   if (Object.hasOwn(value, 'slug') && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.slug)) errors.push('Slug is invalid');
   if (Object.hasOwn(value, 'price') && (!Number.isFinite(Number(value.price)) || Number(value.price) < 0)) errors.push('Price must be a non-negative number');
+  if (Object.hasOwn(value, 'ownerSharePercent') && (!Number.isFinite(Number(value.ownerSharePercent)) || Number(value.ownerSharePercent) < 0 || Number(value.ownerSharePercent) > 100)) errors.push('CodersVoice revenue share must be between 0 and 100');
   if (Object.hasOwn(value, 'category') && !requiredText(value.category, 80)) errors.push('Category is required');
   if (Object.hasOwn(value, 'shortDescription') && !requiredText(value.shortDescription, 320)) errors.push('Short description is required');
   if (Object.hasOwn(value, 'description') && !requiredText(value.description, 20000)) errors.push('Description is required');

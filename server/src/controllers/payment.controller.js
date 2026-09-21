@@ -49,6 +49,7 @@ exports.createOrder = async (req, res) => {
       product: product._id,
       productName: product.name,
       amount: product.price,
+      ownerSharePercent: Number.isFinite(Number(product.ownerSharePercent)) ? Number(product.ownerSharePercent) : 100,
       downloadUrl: product.downloadUrl, // ✅ snapshot
       razorpayOrderId: razorpayOrder.id,
       status: "created"
@@ -215,7 +216,22 @@ exports.verifyPayment = async (req, res) => {
       }
       return res.json({ success: true, alreadyProcessed: true, fulfillmentStatus: current.fulfillmentStatus || 'pending' });
     }
-    const order = await Order.findOneAndUpdate({ razorpayOrderId: razorpay_order_id, status: 'created' }, { status: 'paid', razorpayPaymentId: razorpay_payment_id, razorpaySignature: razorpay_signature }, { new: true });
+    let providerPayment = {};
+    try {
+      const payment = await getRazorpay().payments.fetch(razorpay_payment_id);
+      if (payment.order_id !== razorpay_order_id || Number(payment.amount) !== Number(current.amount) * 100 || payment.currency !== 'INR') {
+        return res.status(400).json({ message: 'Payment details do not match this order' });
+      }
+      providerPayment = {
+        paymentMethod: String(payment.method || '').slice(0, 50) || undefined,
+        paymentCapturedAt: Number.isFinite(Number(payment.created_at)) ? new Date(Number(payment.created_at) * 1000) : undefined,
+      };
+    } catch (error) {
+      // The verified signature remains authoritative. Preserve a successful payment if
+      // the optional provider metadata lookup is temporarily unavailable.
+      console.warn('Could not retrieve Razorpay payment metadata:', error.message);
+    }
+    const order = await Order.findOneAndUpdate({ razorpayOrderId: razorpay_order_id, status: 'created' }, { status: 'paid', razorpayPaymentId: razorpay_payment_id, razorpaySignature: razorpay_signature, ...providerPayment }, { new: true });
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });

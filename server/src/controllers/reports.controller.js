@@ -3,6 +3,7 @@ const ExcelJS = require('exceljs');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const { text } = require('../utils/content');
+const { calculateRevenue } = require('./revenue.controller');
 
 const COLORS = { navy: '#081225', ink: '#13213d', blue: '#2563eb', cyan: '#06b6d4', muted: '#64748b', line: '#dbe4f0', pale: '#f5f9ff', green: '#047857', amber: '#b45309', red: '#b91c1c' };
 const REPORT_RECORD_LIMIT = 5000;
@@ -58,6 +59,12 @@ function orderQuery(query) {
   return filter;
 }
 
+function paymentQuery(query) {
+  const filter = orderQuery(query);
+  if (query.method && text(query.method, 50)) filter.paymentMethod = query.method;
+  return filter;
+}
+
 function reportFilters(query, fields) {
   return fields.flatMap(([label, key]) => (query[key] ? [[label, String(query[key])]] : []));
 }
@@ -77,7 +84,27 @@ function drawSocialLinks(doc, links, y) {
   });
 }
 
-function createPdf(res, title, subtitle, filters, metrics, columns, rows) {
+function drawRevenueChart(doc, y, chart) {
+  const points = (chart || []).slice(-14);
+  if (!points.length) return y;
+  const width = 527;
+  const height = 104;
+  const max = Math.max(1, ...points.map((point) => Number(point.ownerRevenue || 0)));
+  doc.roundedRect(34, y, width, height, 8).fill(COLORS.pale);
+  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(9).text('OWNER REVENUE TREND', 46, y + 11);
+  const baseline = y + 85;
+  const barWidth = Math.max(8, Math.min(22, (width - 36) / points.length - 7));
+  const gap = (width - 36 - barWidth * points.length) / Math.max(1, points.length - 1);
+  points.forEach((point, index) => {
+    const x = 52 + index * (barWidth + gap);
+    const barHeight = Math.max(3, Math.round((Number(point.ownerRevenue || 0) / max) * 52));
+    doc.roundedRect(x, baseline - barHeight, barWidth, barHeight, 2).fill(COLORS.blue);
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(5.8).text(String(point.date || '').slice(5), x - 5, baseline + 6, { width: barWidth + 10, align: 'center', lineBreak: false });
+  });
+  return y + height + 22;
+}
+
+function createPdf(res, title, subtitle, filters, metrics, columns, rows, chart = null) {
   const doc = new PDFDocument({ size: 'A4', margin: 34, bufferPages: true, info: { Title: title, Author: 'CodersVoice' } });
   const filename = `${safeFilePart(title)}-${new Date().toISOString().slice(0, 10)}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
@@ -111,6 +138,7 @@ function createPdf(res, title, subtitle, filters, metrics, columns, rows) {
     doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8).text(label.toUpperCase(), x + 12, y + 37, { width: cardWidth - 24 });
   });
   y += 83;
+  if (chart) y = drawRevenueChart(doc, y, chart);
   const tableHeader = () => {
     doc.roundedRect(34, y, 527, 24, 6).fill(COLORS.ink);
     let x = 40;
@@ -150,7 +178,7 @@ function createPdf(res, title, subtitle, filters, metrics, columns, rows) {
   doc.end();
 }
 
-async function createWorkbook(res, title, filters, metrics, columns, rows) {
+async function createWorkbook(res, title, filters, metrics, columns, rows, chart = null) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'CodersVoice';
   workbook.created = new Date();
@@ -188,6 +216,21 @@ async function createWorkbook(res, title, filters, metrics, columns, rows) {
       if (number % 2 === 1) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; });
     }
   });
+  if (Array.isArray(chart) && chart.length) {
+    const trendSheet = workbook.addWorksheet('Revenue trend');
+    trendSheet.columns = [{ width: 16 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 14 }];
+    trendSheet.mergeCells('A1:E1');
+    trendSheet.getCell('A1').value = 'CodersVoice — Revenue trend data';
+    trendSheet.getCell('A1').font = { name: 'Aptos Display', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    trendSheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF081225' } };
+    trendSheet.getRow(1).height = 30;
+    const trendHeader = trendSheet.addRow(['Date', 'Gross revenue', 'Your revenue', 'Partner payout', 'Paid orders']);
+    trendHeader.eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }; });
+    chart.forEach((point) => trendSheet.addRow([point.date, Number(point.grossRevenue || 0), Number(point.ownerRevenue || 0), Number(point.partnerRevenue || 0), Number(point.orders || 0)]));
+    trendSheet.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: 5 } };
+    trendSheet.views = [{ state: 'frozen', ySplit: 2 }];
+    trendSheet.eachRow((row, number) => { if (number > 2 && number % 2 === 0) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; }); });
+  }
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${safeFilePart(title)}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
   await workbook.xlsx.write(res);
@@ -199,8 +242,8 @@ function sendReport(req, res, next, payload) {
   if (!['pdf', 'xlsx'].includes(format)) return res.status(400).json({ success: false, message: 'Choose PDF or Excel for this report.' });
   const subtitle = `${payload.rows.length} records · Generated ${new Date().toLocaleString('en-IN')}`;
   if (payload.rows.length === REPORT_RECORD_LIMIT) res.setHeader('X-Report-Record-Limit', String(REPORT_RECORD_LIMIT));
-  if (format === 'pdf') return createPdf(res, payload.title, subtitle, payload.filters, payload.metrics, payload.columns, payload.rows);
-  return createWorkbook(res, payload.title, payload.filters, payload.metrics, payload.columns, payload.rows).catch(next);
+  if (format === 'pdf') return createPdf(res, payload.title, subtitle, payload.filters, payload.metrics, payload.columns, payload.rows, payload.chart);
+  return createWorkbook(res, payload.title, payload.filters, payload.metrics, payload.columns, payload.rows, payload.chart).catch(next);
 }
 
 exports.products = async (req, res, next) => { try {
@@ -221,6 +264,39 @@ exports.orders = async (req, res, next) => { try {
     title: 'Orders report', filters: reportFilters(req.query, [['Search', 'q'], ['Payment', 'status'], ['From', 'from'], ['To', 'to']]),
     metrics: [['Orders', items.length, COLORS.blue], ['Paid orders', items.filter((item) => item.status === 'paid').length, COLORS.green], ['Paid revenue', money(revenue), COLORS.cyan]],
     columns: [{ label: 'Product', key: 'product', width: 120 }, { label: 'Customer', key: 'customer', width: 125 }, { label: 'Amount', key: 'amount', width: 65 }, { label: 'Payment', key: 'payment', width: 63 }, { label: 'Delivery', key: 'delivery', width: 75 }, { label: 'Created', key: 'created', width: 78 }], rows,
+  });
+} catch (error) { next(error); } };
+
+exports.payments = async (req, res, next) => { try {
+  const items = await Order.find(paymentQuery(req.query)).sort({ paymentCapturedAt: -1, createdAt: -1 }).limit(REPORT_RECORD_LIMIT).lean();
+  const paid = items.filter((item) => item.status === 'paid');
+  const revenue = paid.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const rows = items.map((item) => ({ product: item.productName, customer: item.email, transaction: item.razorpayPaymentId || item.razorpayOrderId, amount: money(item.amount), method: item.paymentMethod || 'Not captured', status: item.status, paidAt: dateText(item.paymentCapturedAt || item.createdAt) }));
+  return sendReport(req, res, next, {
+    title: 'Payments report', filters: reportFilters(req.query, [['Search', 'q'], ['Status', 'status'], ['Method', 'method'], ['From', 'from'], ['To', 'to']]),
+    metrics: [['Transactions', items.length, COLORS.blue], ['Paid', paid.length, COLORS.green], ['Paid revenue', money(revenue), COLORS.cyan]],
+    columns: [{ label: 'Product', key: 'product', width: 98 }, { label: 'Customer', key: 'customer', width: 110 }, { label: 'Transaction', key: 'transaction', width: 100 }, { label: 'Amount', key: 'amount', width: 58 }, { label: 'Method', key: 'method', width: 58 }, { label: 'Status', key: 'status', width: 48 }, { label: 'Paid at', key: 'paidAt', width: 55 }], rows,
+  });
+} catch (error) { next(error); } };
+
+exports.revenue = async (req, res, next) => { try {
+  const result = await calculateRevenue(req.query);
+  const rows = result.rows.map((item) => ({
+    product: item.product,
+    customer: item.customer,
+    gross: money(item.grossRevenue),
+    share: `${item.ownerSharePercent}%`,
+    owner: money(item.ownerRevenue),
+    partner: money(item.partnerRevenue),
+    paidAt: dateText(item.paidAt),
+  }));
+  return sendReport(req, res, next, {
+    title: 'Revenue analytics report',
+    filters: reportFilters(req.query, [['Products', 'productIds'], ['From', 'from'], ['To', 'to'], ['Fallback owner share', 'defaultOwnerShare']]),
+    metrics: [['Gross revenue', money(result.summary.grossRevenue), COLORS.blue], ['Your revenue', money(result.summary.ownerRevenue), COLORS.green], ['Partner share', money(result.summary.partnerRevenue), COLORS.amber]],
+    columns: [{ label: 'Product', key: 'product', width: 100 }, { label: 'Customer', key: 'customer', width: 100 }, { label: 'Gross', key: 'gross', width: 63 }, { label: 'Your %', key: 'share', width: 50 }, { label: 'Your revenue', key: 'owner', width: 70 }, { label: 'Partner', key: 'partner', width: 65 }, { label: 'Paid at', key: 'paidAt', width: 58 }],
+    rows,
+    chart: result.trend,
   });
 } catch (error) { next(error); } };
 

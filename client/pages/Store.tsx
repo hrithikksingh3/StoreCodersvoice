@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
-import { Category } from '../types';
+import { Category, Product } from '../types';
 import { api } from '../api';
 
 const Store: React.FC = () => {
@@ -11,14 +11,14 @@ const Store: React.FC = () => {
   const initialCategory = queryParams.get('category') as Category | null;
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<Category | 'All'>(initialCategory || 'All');
   const [sortBy, setSortBy] = useState<'newest' | 'price-low' | 'price-high' | 'popularity'>('newest');
 
-  const categories: (Category | 'All')[] = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
+  const categories: (Category | 'All')[] = ['All', ...products.map((product) => product.category).filter((category, index, all) => all.indexOf(category) === index)];
 
-  useEffect(() => { api<{ items: any[] }>('/api/products?limit=100&sort=featured').then((data) => setProducts(data.items)).catch(() => setProducts([])).finally(() => setLoading(false)); }, []);
+  useEffect(() => { api<{ items: Product[] }>('/api/products?limit=100&sort=featured').then((data) => setProducts(data.items)).catch(() => setProducts([])).finally(() => setLoading(false)); }, []);
 
   const filteredProducts = useMemo(() => {
     let result = products.filter(p => {

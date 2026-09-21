@@ -176,6 +176,48 @@ export const SERVICES: Service[] = [
     title: 'Custom Brochure & Pamphlet Design',
     description: 'Get clear, brand-aligned brochures, pamphlets, flyers, and promotional designs that make your offer easy to understand and ready to share online or in print.',
     icon: 'design'
+  },
+  {
+    id: '7',
+    title: 'Brand Identity & UI/UX',
+    description: 'Create a distinctive brand identity and clear, intuitive product experience across visual systems, web design, and user journeys.',
+    icon: 'brand'
+  },
+  {
+    id: '8',
+    title: 'Software Development & Web Applications',
+    description: 'Build reliable custom software, web applications, and digital platforms designed for real operational needs and future growth.',
+    icon: 'software'
+  },
+  {
+    id: '9',
+    title: 'E-commerce & API Integrations',
+    description: 'Launch conversion-focused e-commerce experiences and connect payments, business tools, APIs, and workflows into one dependable system.',
+    icon: 'integration'
+  },
+  {
+    id: '10',
+    title: 'AI & LLM Visibility',
+    description: 'Make your business easier to understand and discover across search, AI-assisted research, and emerging answer-driven channels.',
+    icon: 'aiVisibility'
+  },
+  {
+    id: '11',
+    title: 'Performance Optimisation',
+    description: 'Improve speed, reliability, conversion, and technical quality so your existing digital product works harder for customers and teams.',
+    icon: 'performance'
+  },
+  {
+    id: '12',
+    title: 'Product Strategy & IT Consulting',
+    description: 'Clarify the right next move with product strategy, technical architecture, technology direction, and practical IT consulting.',
+    icon: 'consulting'
+  },
+  {
+    id: '13',
+    title: 'Product Promotion & Brand Collaboration',
+    description: 'Put your product in front of a relevant technology audience through sponsored visibility, developer outreach, promotions, and brand collaborations.',
+    icon: 'collaboration'
   }
 ];
 

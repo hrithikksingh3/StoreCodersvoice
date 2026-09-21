@@ -10,6 +10,13 @@ const serviceIcons: Record<string, string> = {
   cpu: '🤖',
   marketing: '📈',
   design: '🎨',
+  brand: '✨',
+  software: '🧩',
+  integration: '🔗',
+  aiVisibility: '🔎',
+  performance: '⚡',
+  consulting: '🧭',
+  collaboration: '🤝',
 };
 
 const Services: React.FC = () => {

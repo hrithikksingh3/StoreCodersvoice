@@ -12,6 +12,8 @@ const productSchema = new mongoose.Schema({
   shortDescription: { type: String, trim: true, maxlength: 320 },
   description: { type: String, trim: true, maxlength: 20000 },
   price: { type: Number, min: 0 },
+  // Percentage of paid revenue retained by CodersVoice. The remaining share is attributed to a partner.
+  ownerSharePercent: { type: Number, min: 0, max: 100, default: 100 },
   currency: { type: String, default: 'INR', enum: ['INR'] },
   category: { type: String, trim: true, maxlength: 80, index: true },
   tags: [{ type: String, trim: true, maxlength: 50 }],

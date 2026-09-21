@@ -33,6 +33,8 @@ const orderSchema = new mongoose.Schema(
     },
     razorpayPaymentId: { type: String, unique: true, sparse: true, index: true },
     razorpaySignature: String,
+    paymentMethod: { type: String, trim: true, maxlength: 50, index: true },
+    paymentCapturedAt: Date,
 
     // Customer
     email: {
@@ -54,6 +56,8 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       required: true
     },
+    // Immutable sale-time snapshot. It keeps historical revenue reports correct after a product split changes.
+    ownerSharePercent: { type: Number, min: 0, max: 100, default: 100 },
     downloadUrl: {
       type: String,
       required: true
@@ -75,5 +79,8 @@ const orderSchema = new mongoose.Schema(
 );
 
 orderSchema.index({ email: 1, createdAt: -1 });
+orderSchema.index({ status: 1, paymentMethod: 1, createdAt: -1 });
+orderSchema.index({ status: 1, productId: 1, createdAt: -1 });
+orderSchema.index({ status: 1, paymentCapturedAt: -1 });
 
 module.exports = mongoose.model("Order", orderSchema);

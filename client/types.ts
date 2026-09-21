@@ -8,6 +8,7 @@ export interface Product {
   slug: string;
   category: Category;
   price: number;
+  ownerSharePercent?: number;
   thumbnail: string;
   demoUrl: string;
   tags: string[];
@@ -20,6 +21,12 @@ export interface Product {
   downloadUrl?: string;
   featured?: boolean;
   sortOrder?: number;
+  seoTitle?: string;
+  seoDescription?: string;
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
 }
 
 export interface BlogPost {
