@@ -39,8 +39,14 @@ const orderSchema = new mongoose.Schema(
     // Customer
     email: {
       type: String,
-      required: true
+      required: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 254,
+      index: true,
     },
+    customerName: { type: String, trim: true, maxlength: 100 },
+    phone: { type: String, trim: true, maxlength: 32 },
 
     // Product snapshot (IMPORTANT)
     productId: {

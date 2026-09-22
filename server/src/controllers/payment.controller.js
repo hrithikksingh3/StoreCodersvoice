@@ -1,10 +1,15 @@
 const crypto = require("crypto");
 const getRazorpay = require("../config/razorpay");
 const Order = require("../models/Order");
-const sendMail = require("../utils/sendMail");
 const Product = require("../models/Product");
-const generateInvoice = require("../utils/generateInvoice");
 const postPaymentActions = require("../utils/postPaymentActions");
+
+const optionalText = (value, max) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= max ? trimmed : null;
+};
 
 
 
@@ -14,14 +19,18 @@ const postPaymentActions = require("../utils/postPaymentActions");
 exports.createOrder = async (req, res) => {
   try {
     const { productId, email } = req.body;
+    const customerName = optionalText(req.body.customerName, 100);
+    const phone = optionalText(req.body.phone, 32);
 
     if (typeof productId !== 'string' || !productId || productId.length > 100) {
       return res.status(400).json({ message: "Invalid product selected" });
     }
 
     if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({ message: "Enter a valid email address for delivery" });
     }
+    if (customerName === null) return res.status(400).json({ message: 'Name must be plain text of 100 characters or fewer' });
+    if (phone === null) return res.status(400).json({ message: 'Phone number must be 32 characters or fewer' });
 
     // A product ID is preferred. Slug lookup keeps existing checkout links working.
     const product = await Product.findOne({
@@ -33,7 +42,49 @@ exports.createOrder = async (req, res) => {
       return res.status(404).json({ message: "This product is not available for purchase" });
     }
 
-    const amountInPaise = product.price * 100;
+    const normalizedEmail = email.trim().toLowerCase();
+    const isFree = product.isFree === true;
+    const price = Number(product.price);
+    if (!isFree && (!Number.isFinite(price) || price <= 0)) {
+      return res.status(400).json({ message: 'This product has an invalid price. Please contact CodersVoice support.' });
+    }
+
+    // Free items never create a Razorpay order. A paid order record is created directly
+    // so the existing signed-download and fulfillment workflow remains the single path.
+    if (isFree) {
+      const existingGift = await Order.findOne({
+        product: product._id,
+        email: normalizedEmail,
+        paymentMethod: 'free',
+        status: 'paid',
+      }).sort({ createdAt: -1 });
+      if (existingGift) {
+        if (['pending', 'failed'].includes(existingGift.fulfillmentStatus || 'pending')) {
+          void postPaymentActions(existingGift._id, { retry: true }).catch((error) => console.error('Gift fulfillment retry failed:', error.message));
+        }
+        return res.json({ success: true, free: true, alreadyClaimed: true, fulfillmentStatus: existingGift.fulfillmentStatus || 'pending', productName: product.name });
+      }
+      const giftOrder = await Order.create({
+        email: normalizedEmail,
+        customerName,
+        phone,
+        productId: String(product._id),
+        product: product._id,
+        productName: product.name,
+        amount: 0,
+        ownerSharePercent: Number.isFinite(Number(product.ownerSharePercent)) ? Number(product.ownerSharePercent) : 100,
+        downloadUrl: product.downloadUrl,
+        razorpayOrderId: `free_${crypto.randomUUID()}`,
+        paymentMethod: 'free',
+        paymentCapturedAt: new Date(),
+        status: 'paid',
+      });
+      res.status(201).json({ success: true, free: true, fulfillmentStatus: 'processing', productName: product.name });
+      void postPaymentActions(giftOrder._id).catch((error) => console.error('Gift fulfillment failed:', error.message));
+      return;
+    }
+
+    const amountInPaise = Math.round(price * 100);
 
     // 🔁 Create Razorpay order
     const razorpayOrder = await getRazorpay().orders.create({
@@ -44,11 +95,13 @@ exports.createOrder = async (req, res) => {
 
     // 🧾 Save order snapshot in DB
     await Order.create({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
+      customerName,
+      phone,
       productId: String(product._id),
       product: product._id,
       productName: product.name,
-      amount: product.price,
+      amount: price,
       ownerSharePercent: Number.isFinite(Number(product.ownerSharePercent)) ? Number(product.ownerSharePercent) : 100,
       downloadUrl: product.downloadUrl, // ✅ snapshot
       razorpayOrderId: razorpayOrder.id,

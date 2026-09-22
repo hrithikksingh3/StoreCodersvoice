@@ -1,7 +1,7 @@
 const Product = require('../models/Product');
 const { pagination, slugify, text, requiredText, validUrl, stringArray, publicProduct } = require('../utils/content');
 const audit = require('../utils/audit');
-const fields = ['name', 'slug', 'shortDescription', 'description', 'price', 'ownerSharePercent', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
+const fields = ['name', 'slug', 'shortDescription', 'description', 'price', 'isFree', 'ownerSharePercent', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
 const allowedStatuses = ['draft', 'published', 'hidden', 'archived'];
 
 function validate(input, publishing = false) {
@@ -10,7 +10,13 @@ function validate(input, publishing = false) {
   const errors = [];
   if (Object.hasOwn(value, 'name') && !requiredText(value.name, 160)) errors.push('Name is required and must be at most 160 characters');
   if (Object.hasOwn(value, 'slug') && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.slug)) errors.push('Slug is invalid');
-  if (Object.hasOwn(value, 'price') && (!Number.isFinite(Number(value.price)) || Number(value.price) < 0)) errors.push('Price must be a non-negative number');
+  if (Object.hasOwn(value, 'isFree') && typeof value.isFree !== 'boolean') errors.push('Free product flag must be true or false');
+  const isFree = value.isFree === true;
+  if (isFree) value.price = 0;
+  if (Object.hasOwn(value, 'price')) {
+    value.price = Number(value.price);
+    if (!Number.isFinite(value.price) || value.price < 0 || (!isFree && value.price <= 0)) errors.push('Price must be greater than zero. Mark this product as free to offer it at no cost');
+  }
   if (Object.hasOwn(value, 'ownerSharePercent') && (!Number.isFinite(Number(value.ownerSharePercent)) || Number(value.ownerSharePercent) < 0 || Number(value.ownerSharePercent) > 100)) errors.push('CodersVoice revenue share must be between 0 and 100');
   if (Object.hasOwn(value, 'category') && !requiredText(value.category, 80)) errors.push('Category is required');
   if (Object.hasOwn(value, 'shortDescription') && !requiredText(value.shortDescription, 320)) errors.push('Short description is required');
@@ -21,6 +27,7 @@ function validate(input, publishing = false) {
   if (Object.hasOwn(value, 'galleryImages') && (!Array.isArray(value.galleryImages) || value.galleryImages.length > 5 || !value.galleryImages.every((item) => requiredText(item, 2000) && validUrl(item)))) errors.push('Gallery images must contain at most 5 valid image URLs');
   if (Object.hasOwn(value, 'status') && !allowedStatuses.includes(value.status)) errors.push('Invalid status');
   if (publishing && (!requiredText(value.name, 160) || !value.slug || !requiredText(value.shortDescription, 320) || !requiredText(value.description, 20000) || !requiredText(value.thumbnail, 2000) || !validUrl(value.thumbnail) || !requiredText(value.downloadUrl, 2000) || !validUrl(value.downloadUrl))) errors.push('A published product needs name, slug, descriptions, thumbnail and download URL');
+  if (publishing && !isFree && (!Number.isFinite(Number(value.price)) || Number(value.price) <= 0)) errors.push('A paid product needs a price greater than zero. Mark it free to offer it at no cost');
   return { value, errors };
 }
 exports.listPublic = async (req, res, next) => { try {

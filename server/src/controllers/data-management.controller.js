@@ -77,7 +77,7 @@ const describePlan = async (body) => {
 };
 
 const safeOrderExport = (item) => ({
-  id: String(item._id), email: item.email, productId: item.productId, productName: item.productName,
+  id: String(item._id), email: item.email, customerName: item.customerName || null, phone: item.phone || null, productId: item.productId, productName: item.productName,
   amount: Number(item.amount || 0), currency: 'INR', paymentStatus: item.status,
   fulfillmentStatus: item.fulfillmentStatus || 'pending', paymentMethod: item.paymentMethod || null,
   paymentCapturedAt: item.paymentCapturedAt || null, razorpayOrderId: item.razorpayOrderId || null,
@@ -99,7 +99,7 @@ const exportWorkbook = async (res, targetKey, rows) => {
   workbook.creator = 'CodersVoice';
   const sheet = workbook.addWorksheet(targetKey === 'orders' ? 'Orders backup' : 'Audit logs backup', { views: [{ state: 'frozen', ySplit: 2 }] });
   const columns = targetKey === 'orders'
-    ? [['ID', 'id'], ['Customer email', 'email'], ['Product ID', 'productId'], ['Product', 'productName'], ['Amount (INR)', 'amount'], ['Payment', 'paymentStatus'], ['Fulfillment', 'fulfillmentStatus'], ['Method', 'paymentMethod'], ['Paid at', 'paymentCapturedAt'], ['Razorpay order', 'razorpayOrderId'], ['Razorpay payment', 'razorpayPaymentId'], ['Your share %', 'ownerSharePercent'], ['Created at', 'createdAt'], ['Updated at', 'updatedAt']]
+    ? [['ID', 'id'], ['Customer email', 'email'], ['Customer name', 'customerName'], ['Phone', 'phone'], ['Product ID', 'productId'], ['Product', 'productName'], ['Amount (INR)', 'amount'], ['Payment', 'paymentStatus'], ['Fulfillment', 'fulfillmentStatus'], ['Method', 'paymentMethod'], ['Paid at', 'paymentCapturedAt'], ['Razorpay order', 'razorpayOrderId'], ['Razorpay payment', 'razorpayPaymentId'], ['Your share %', 'ownerSharePercent'], ['Created at', 'createdAt'], ['Updated at', 'updatedAt']]
     : [['ID', 'id'], ['Actor ID', 'actorId'], ['Action', 'action'], ['Entity type', 'entityType'], ['Entity ID', 'entityId'], ['Summary', 'summary'], ['IP', 'ip'], ['User agent', 'userAgent'], ['Created at', 'createdAt'], ['Updated at', 'updatedAt']];
   sheet.mergeCells(1, 1, 1, columns.length);
   sheet.getCell('A1').value = `CodersVoice ${targetKey === 'orders' ? 'Orders' : 'Audit logs'} backup`;

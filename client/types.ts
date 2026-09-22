@@ -8,6 +8,7 @@ export interface Product {
   slug: string;
   category: Category;
   price: number;
+  isFree?: boolean;
   ownerSharePercent?: number;
   thumbnail: string;
   demoUrl: string;

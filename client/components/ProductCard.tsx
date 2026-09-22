@@ -26,6 +26,7 @@ const navigate = useNavigate();
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
         <div className="absolute top-3 left-3 flex gap-2">
+          {product.isFree && <span className="px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-md text-[10px] font-black text-slate-950 uppercase tracking-wider">Free gift</span>}
           {product.tags.slice(0, 2).map(tag => (
             <span key={tag} className="px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-md text-[10px] font-bold text-blue-400 border border-blue-500/30 uppercase tracking-wider">
               {tag}
@@ -48,7 +49,7 @@ const navigate = useNavigate();
         
         <div className="mt-auto">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xl font-extrabold text-white">₹{product.price}</span>
+            <span className={`text-xl font-extrabold ${product.isFree ? "text-emerald-300" : "text-white"}`}>{product.isFree ? "Free gift" : `₹${product.price}`}</span>
             <span className="text-[10px] font-medium text-slate-500 uppercase">{product.category}</span>
           </div>
           
@@ -66,7 +67,7 @@ const navigate = useNavigate();
   onClick={() => navigate(`/product/${product.slug}`)}
   className="py-2 text-center rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
 >
-  Buy Now
+  {product.isFree ? "Get Free" : "Buy Now"}
 </button>
 
 

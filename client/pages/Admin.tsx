@@ -15,6 +15,7 @@ const blankProduct = {
   shortDescription: "",
   description: "",
   price: 0,
+  isFree: false,
   ownerSharePercent: 100,
   category: "Web Dev Projects",
   thumbnail: "",
@@ -487,8 +488,9 @@ const Admin: React.FC = () => {
       const required = [
         ["name", "product name"], ["slug", "URL slug"], ["category", "category"], ["shortDescription", "short description"], ["description", "description"], ["thumbnail", "thumbnail"], ["downloadUrl", "private download URL"],
       ].filter(([key]) => !String(editing[key] ?? "").trim()).map(([, label]) => label);
-      if (required.length || !Number.isFinite(Number(editing.price)) || Number(editing.price) < 0) {
-        const message = required.length ? `Complete required fields: ${required.join(", ")}.` : "Price must be zero or greater.";
+      const isFree = editing.isFree === true;
+      if (required.length || !Number.isFinite(Number(editing.price)) || Number(editing.price) < 0 || (!isFree && Number(editing.price) <= 0)) {
+        const message = required.length ? `Complete required fields: ${required.join(", ")}.` : "Price must be greater than zero. Mark the product as free to offer it at no cost.";
         setEditorError(message);
         reportError(message);
         return;
@@ -502,7 +504,8 @@ const Admin: React.FC = () => {
     }
     const prepared = {
       ...editing,
-      price: Number(editing.price),
+      isFree: editing.isFree === true,
+      price: editing.isFree === true ? 0 : Number(editing.price),
       tags: listify(editing.tags),
       techStack: listify(editing.techStack),
       galleryImages: listify(editing.galleryImages),
@@ -1293,8 +1296,8 @@ const Admin: React.FC = () => {
                   {items.map((item) => (
                     <tr key={item._id} className="border-b border-slate-800/80">
                       <td className="p-4 font-medium">{item.productName}</td>
-                      <td className="p-4 text-slate-400">{item.email}</td>
-                      <td className="p-4">₹{item.amount}</td>
+                      <td className="p-4 text-slate-400"><p>{item.customerName || "—"}</p><p className="mt-1 text-xs text-slate-500">{item.email}{item.phone ? ` · ${item.phone}` : ""}</p></td>
+                      <td className="p-4">{item.paymentMethod === "free" ? <span className="font-bold text-emerald-300">Free gift</span> : `₹${item.amount}`}</td>
                       <td className="p-4 capitalize">{item.status}</td>
                       <td className="p-4">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${item.fulfillmentStatus === "delivered" ? "bg-emerald-500/15 text-emerald-300" : item.fulfillmentStatus === "failed" ? "bg-red-500/15 text-red-300" : "bg-amber-400/15 text-amber-300"}`}>{item.fulfillmentStatus || "not tracked"}</span>
@@ -1332,8 +1335,8 @@ const Admin: React.FC = () => {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item._id} className="border-b border-slate-800/80 last:border-0">
-                      <td className="p-4"><p className="font-semibold text-slate-100">{item.productName}</p><p className="mt-1 text-xs text-slate-400">{item.email}</p></td>
-                      <td className="p-4 font-mono text-xs text-cyan-200">{item.razorpayPaymentId || "Not captured"}</td>
+                      <td className="p-4"><p className="font-semibold text-slate-100">{item.productName}</p><p className="mt-1 text-xs text-slate-400">{item.customerName ? `${item.customerName} · ` : ""}{item.email}{item.phone ? ` · ${item.phone}` : ""}</p></td>
+                      <td className="p-4 font-mono text-xs text-cyan-200">{item.paymentMethod === "free" ? "Gift claim" : (item.razorpayPaymentId || "Not captured")}</td>
                       <td className="p-4 font-mono text-xs text-slate-400">{item.razorpayOrderId || "—"}</td>
                       <td className="p-4 font-bold text-slate-100">{formatINR(item.amount)}</td>
                       <td className="p-4 capitalize text-slate-300">{item.paymentMethod || "Not captured"}</td>
@@ -1538,7 +1541,29 @@ const Admin: React.FC = () => {
                     {field("name", "Product name", "text", true)}
                     {field("slug", "URL slug", "text", true)}
                     {field("category", "Category", "text", true)}
-                    {field("price", "Price (INR)", "number", true)}
+                    <label className="block text-sm font-medium text-slate-300">
+                      Price (INR){!editing.isFree && <span className="ml-1 text-red-400">*</span>}
+                      <input
+                        type="number"
+                        min={editing.isFree ? 0 : 1}
+                        step="0.01"
+                        required={!editing.isFree}
+                        disabled={editing.isFree}
+                        value={editing.isFree ? 0 : (editing.price ?? "")}
+                        onChange={(event) => setEditing({ ...editing, price: event.target.value })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                      <span className="mt-1 block text-xs font-normal text-slate-500">Paid products must have a price above zero.</span>
+                    </label>
+                    <label className="mt-7 flex cursor-pointer items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={editing.isFree === true}
+                        onChange={(event) => setEditing({ ...editing, isFree: event.target.checked, price: event.target.checked ? 0 : editing.price })}
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-950 text-blue-500 focus:ring-blue-500"
+                      />
+                      <span><span className="font-bold text-emerald-300">Free product</span><span className="block text-xs text-slate-500">No payment; delivered as a CodersVoice gift.</span></span>
+                    </label>
                     {field("ownerSharePercent", "Your revenue share %", "number", false)}
                   </>
                   <div className="md:col-span-2">

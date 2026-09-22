@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const Order = require('../models/Order');
 const generateInvoice = require('./generateInvoice');
 const sendMail = require('./sendMail');
+const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 const getDeliveryConfig = () => {
   const apiUrl = (process.env.PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
@@ -26,15 +27,21 @@ module.exports = async function postPaymentActions(orderId, { retry = false } = 
   if (!claimed) return { skipped: true, reason: 'Delivery is already being processed or the order does not exist.' };
 
   try {
-    const invoiceBuffer = await generateInvoice(claimed);
+    const isGift = claimed.paymentMethod === 'free';
+    const invoiceBuffer = isGift ? null : await generateInvoice(claimed);
     const { apiUrl, secret } = getDeliveryConfig();
     const token = crypto.createHmac('sha256', secret).update(`${claimed._id}:${claimed.email}`).digest('hex');
     const downloadLink = `${apiUrl}/api/orders/${claimed._id}/download?email=${encodeURIComponent(claimed.email)}&token=${token}`;
+    const productName = escapeHtml(claimed.productName);
+    const greeting = claimed.customerName ? `Hello ${escapeHtml(claimed.customerName)},` : 'Hello,';
+    const heading = isGift ? 'Your CodersVoice gift is ready 🎁' : 'Payment successful 🎉';
+    const intro = isGift ? `CodersVoice is happy to share <b>${productName}</b> with you as a gift.` : `Thanks for purchasing <b>${productName}</b> from <b>CodersVoice</b>.`;
+    const actionLabel = isGift ? '⬇ Download your gift' : '⬇ Download source code';
     const email = await sendMail({
       to: claimed.email,
-      subject: `Your ${claimed.productName} – CodersVoice`,
-      html: `<div style="font-family:Inter,Arial,sans-serif;background:#0b0f1a;padding:40px"><div style="max-width:600px;margin:auto;background:#111827;border-radius:14px;padding:32px;color:#e5e7eb"><h2 style="margin:0 0 10px;color:#8b5cf6;">Payment Successful 🎉</h2><p style="color:#cbd5f5;font-size:15px;">Thanks for purchasing <b>${claimed.productName}</b> from <b>CodersVoice</b>.</p><div style="margin:28px 0;padding:20px;background:#020617;border-radius:12px;text-align:center"><p style="margin-bottom:14px;font-size:14px;color:#94a3b8">Click below to download your source code</p><a href="${downloadLink}" target="_blank" style="display:inline-block;padding:14px 22px;background:linear-gradient(90deg,#7b61ff,#00f0ff);color:#020617;text-decoration:none;font-weight:700;border-radius:10px">⬇ Download Source Code</a></div><p style="font-size:13px;color:#94a3b8;text-align:center">If you face any issue, just reply to this email.<br/>— Team CodersVoice</p></div></div>`,
-      attachments: [{ filename: `CodersVoice-Invoice-${claimed._id}.pdf`, content: invoiceBuffer, contentType: 'application/pdf' }],
+      subject: isGift ? `Your CodersVoice gift: ${claimed.productName}` : `Your ${claimed.productName} – CodersVoice`,
+      html: `<div style="font-family:Inter,Arial,sans-serif;background:#0b0f1a;padding:40px"><div style="max-width:600px;margin:auto;background:#111827;border-radius:14px;padding:32px;color:#e5e7eb"><h2 style="margin:0 0 10px;color:#8b5cf6;">${heading}</h2><p style="color:#cbd5f5;font-size:15px;">${greeting}</p><p style="color:#cbd5f5;font-size:15px;">${intro}</p><div style="margin:28px 0;padding:20px;background:#020617;border-radius:12px;text-align:center"><p style="margin-bottom:14px;font-size:14px;color:#94a3b8">Use this secure link to access your product</p><a href="${downloadLink}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 22px;background:linear-gradient(90deg,#7b61ff,#00f0ff);color:#020617;text-decoration:none;font-weight:700;border-radius:10px">${actionLabel}</a></div><p style="font-size:13px;color:#94a3b8;text-align:center">If you face any issue, just reply to this email.<br/>— Team CodersVoice</p></div></div>`,
+      attachments: invoiceBuffer ? [{ filename: `CodersVoice-Invoice-${claimed._id}.pdf`, content: invoiceBuffer, contentType: 'application/pdf' }] : [],
     });
     await Order.findByIdAndUpdate(claimed._id, {
       $set: { fulfillmentStatus: 'delivered', fulfillmentEmailId: email.id, fulfilledAt: new Date() },

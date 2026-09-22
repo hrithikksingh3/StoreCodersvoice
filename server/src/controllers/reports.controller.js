@@ -51,7 +51,7 @@ function orderQuery(query) {
   if (['created', 'paid', 'failed'].includes(query.status)) filter.status = query.status;
   if (query.q && text(query.q, 120)) {
     const value = new RegExp(query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ email: value }, { productName: value }, { razorpayOrderId: value }, { razorpayPaymentId: value }];
+    filter.$or = [{ email: value }, { customerName: value }, { phone: value }, { productName: value }, { razorpayOrderId: value }, { razorpayPaymentId: value }];
   }
   const from = dateValue(query.from);
   const to = dateValue(query.to, true);
@@ -259,7 +259,7 @@ exports.products = async (req, res, next) => { try {
 exports.orders = async (req, res, next) => { try {
   const items = await Order.find(orderQuery(req.query)).sort({ createdAt: -1 }).limit(REPORT_RECORD_LIMIT).lean();
   const revenue = items.filter((item) => item.status === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const rows = items.map((item) => ({ product: item.productName, customer: item.email, amount: money(item.amount), payment: item.status, delivery: item.fulfillmentStatus || 'not tracked', created: dateText(item.createdAt) }));
+  const rows = items.map((item) => ({ product: item.productName, customer: item.customerName ? `${item.customerName} (${item.email})` : item.email, amount: item.paymentMethod === 'free' ? 'Free gift' : money(item.amount), payment: item.status, delivery: item.fulfillmentStatus || 'not tracked', created: dateText(item.createdAt) }));
   return sendReport(req, res, next, {
     title: 'Orders report', filters: reportFilters(req.query, [['Search', 'q'], ['Payment', 'status'], ['From', 'from'], ['To', 'to']]),
     metrics: [['Orders', items.length, COLORS.blue], ['Paid orders', items.filter((item) => item.status === 'paid').length, COLORS.green], ['Paid revenue', money(revenue), COLORS.cyan]],
@@ -271,7 +271,7 @@ exports.payments = async (req, res, next) => { try {
   const items = await Order.find(paymentQuery(req.query)).sort({ paymentCapturedAt: -1, createdAt: -1 }).limit(REPORT_RECORD_LIMIT).lean();
   const paid = items.filter((item) => item.status === 'paid');
   const revenue = paid.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const rows = items.map((item) => ({ product: item.productName, customer: item.email, transaction: item.razorpayPaymentId || item.razorpayOrderId, amount: money(item.amount), method: item.paymentMethod || 'Not captured', status: item.status, paidAt: dateText(item.paymentCapturedAt || item.createdAt) }));
+  const rows = items.map((item) => ({ product: item.productName, customer: item.customerName ? `${item.customerName} (${item.email})` : item.email, transaction: item.paymentMethod === 'free' ? 'Gift claim' : (item.razorpayPaymentId || item.razorpayOrderId), amount: item.paymentMethod === 'free' ? 'Free gift' : money(item.amount), method: item.paymentMethod || 'Not captured', status: item.status, paidAt: dateText(item.paymentCapturedAt || item.createdAt) }));
   return sendReport(req, res, next, {
     title: 'Payments report', filters: reportFilters(req.query, [['Search', 'q'], ['Status', 'status'], ['Method', 'method'], ['From', 'from'], ['To', 'to']]),
     metrics: [['Transactions', items.length, COLORS.blue], ['Paid', paid.length, COLORS.green], ['Paid revenue', money(revenue), COLORS.cyan]],

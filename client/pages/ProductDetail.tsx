@@ -18,10 +18,13 @@ const ProductDetail: React.FC = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
 const [selectedProduct, setSelectedProduct] = useState<any>(null);
 const [email, setEmail] = useState("");
+const [customerName, setCustomerName] = useState("");
+const [phone, setPhone] = useState("");
 
 
 const [isProcessing, setIsProcessing] = useState(false);
 const [showSuccessModal, setShowSuccessModal] = useState(false);
+const [claimedGift, setClaimedGift] = useState(false);
 
 
   useEffect(() => {
@@ -37,14 +40,19 @@ const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   //handle buy now click
 
-  const handleCheckout = (product: any) => {
+const handleCheckout = (product: any) => {
   setSelectedProduct(product);
+  setClaimedGift(false);
   setShowEmailModal(true);
 };
 
 
 const confirmCheckout = async () => {
-  if (!email || !selectedProduct) return;
+  if (!selectedProduct) return;
+  if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+    toast.error("Enter a valid email address for delivery.");
+    return;
+  }
   setIsProcessing(true);
   try {
     const response = await fetch(`${API_BASE_URL}/api/payment/create-order`, {
@@ -54,14 +62,27 @@ const confirmCheckout = async () => {
       },
       body: JSON.stringify({
         productId: selectedProduct.id,
-        email: email,
+        email: email.trim(),
+        customerName: customerName.trim(),
+        phone: phone.trim(),
       }),
     });
 
     const data = await response.json();
-setIsProcessing(false);
     if (!data.success) {
-      alert(data.message || "Order failed");
+      toast.error(data.message || "Unable to start checkout.");
+      return;
+    }
+
+    if (data.free) {
+      setClaimedGift(true);
+      setShowEmailModal(false);
+      setShowSuccessModal(true);
+      setSelectedProduct(null);
+      setEmail("");
+      setCustomerName("");
+      setPhone("");
+      toast.success(data.alreadyClaimed ? "This gift was already claimed. We are preparing the delivery email again." : "Your CodersVoice gift is being prepared.");
       return;
     }
 
@@ -74,7 +95,9 @@ setIsProcessing(false);
       description: data.productName,
       order_id: data.orderId,
       prefill: {
-        email: email,
+        email: email.trim(),
+        name: customerName.trim() || undefined,
+        contact: phone.trim() || undefined,
       },
       theme: {
         color: "#2563eb",
@@ -89,8 +112,8 @@ setIsProcessing(false);
     });
 
     const result = await verifyRes.json();
- setIsProcessing(false);
     if (result.success) {
+        setClaimedGift(false);
         setShowSuccessModal(true);
       toast.success("Payment successful. Your delivery email is being prepared.");
     } else {
@@ -98,6 +121,8 @@ setIsProcessing(false);
     }
   } catch (err) {
     toast.error("Something went wrong 😓");
+  } finally {
+    setIsProcessing(false);
   }
 },
     };
@@ -107,10 +132,15 @@ setIsProcessing(false);
 
     setShowEmailModal(false);
     setEmail("");
+    setCustomerName("");
+    setPhone("");
     setSelectedProduct(null);
 
   } catch (error) {
     console.error("Checkout error:", error);
+    toast.error("Unable to start checkout. Please try again.");
+  } finally {
+    setIsProcessing(false);
   }
 };
 
@@ -148,11 +178,12 @@ setIsProcessing(false);
 
           {/* Details */}
           <div>
-            <div className="inline-block px-3 py-1 rounded-full bg-blue-600/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider mb-4">
-              {product.category}
+            <div className="mb-4 flex flex-wrap gap-2">
+              <span className="inline-block px-3 py-1 rounded-full bg-blue-600/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider">{product.category}</span>
+              {product.isFree && <span className="inline-block px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">CodersVoice gift</span>}
             </div>
             <h1 className="text-4xl md:text-5xl font-black mb-6 text-white">{product.title}</h1>
-            <div className="text-3xl font-black text-white mb-8">₹{product.price}</div>
+            <div className={`text-3xl font-black mb-8 ${product.isFree ? "text-emerald-300" : "text-white"}`}>{product.isFree ? "Free gift" : `₹${product.price}`}</div>
             
             <p className="text-slate-400 text-lg mb-10 leading-relaxed">
               {product.fullDescription}
@@ -186,7 +217,7 @@ setIsProcessing(false);
       d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
     />
   </svg>
-  Buy Now
+  {product.isFree ? "Get Free Gift" : "Buy Now"}
 </button>
 
             </div>
@@ -233,25 +264,27 @@ setIsProcessing(false);
 {showEmailModal && (
   <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
     <div className="glass rounded-2xl p-8 w-full max-w-md border border-white/10">
-      <h2 className="text-2xl font-bold text-white mb-4">
-        Enter Your Email
-      </h2>
+      <h2 className="text-2xl font-bold text-white mb-4">{selectedProduct?.isFree ? "Claim your free gift" : "Checkout details"}</h2>
 
       <p className="text-slate-400 text-sm mb-6">
-        We’ll send the source code to your email after payment.
+        {selectedProduct?.isFree ? "Enter your valid email address. Your CodersVoice gift and access details will be sent only to this email." : "Enter your valid email address. You will receive the product and details in this email only after payment."}
       </p>
 
-      <input
-        type="email"
-        placeholder="you@example.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6"
-      />
+      <label className="mb-4 block text-sm font-medium text-slate-200">Email address <span className="text-red-400">*</span>
+        <input autoFocus type="email" autoComplete="email" required placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5 w-full px-4 py-3 rounded-lg bg-slate-900 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </label>
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label className="block text-sm font-medium text-slate-200">Name <span className="font-normal text-slate-500">(optional)</span>
+          <input type="text" autoComplete="name" maxLength={100} placeholder="Your name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mt-1.5 w-full px-4 py-3 rounded-lg bg-slate-900 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </label>
+        <label className="block text-sm font-medium text-slate-200">Phone number <span className="font-normal text-slate-500">(optional)</span>
+          <input type="tel" autoComplete="tel" maxLength={32} placeholder="+91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1.5 w-full px-4 py-3 rounded-lg bg-slate-900 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </label>
+      </div>
 
       <div className="flex gap-4">
         <button
-          onClick={() => setShowEmailModal(false)}
+          onClick={() => { setShowEmailModal(false); setEmail(""); setCustomerName(""); setPhone(""); }}
           className="flex-1 py-3 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition"
         >
           Cancel
@@ -261,7 +294,7 @@ setIsProcessing(false);
           onClick={confirmCheckout}
           className="flex-1 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition"
         >
-          Continue
+          {selectedProduct?.isFree ? "Get free product" : "Continue to payment"}
         </button>
       </div>
     </div>
@@ -275,7 +308,7 @@ setIsProcessing(false);
     <div className="glass rounded-2xl p-8 flex flex-col items-center gap-6 border border-white/10">
       <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       <p className="text-white font-medium">
-        Processing payment...
+        {selectedProduct?.isFree ? "Preparing your free delivery..." : "Processing payment..."}
       </p>
     </div>
   </div>
@@ -303,11 +336,11 @@ setIsProcessing(false);
       </div>
 
       <h2 className="text-2xl font-bold text-white mb-3">
-        Payment Successful 🎉
+        {claimedGift ? "Gift claimed 🎁" : "Payment successful 🎉"}
       </h2>
 
       <p className="text-slate-400 mb-6">
-        Your payment is confirmed. Your delivery email is now being prepared; please check your inbox shortly.
+        {claimedGift ? "Your CodersVoice gift is being prepared. Please check this email address shortly for your secure delivery link." : "Your payment is confirmed. Your delivery email is now being prepared; please check your inbox shortly."}
       </p>
 
       <button

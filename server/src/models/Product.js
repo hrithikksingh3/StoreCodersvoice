@@ -11,7 +11,9 @@ const productSchema = new mongoose.Schema({
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, maxlength: 180, match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/ },
   shortDescription: { type: String, trim: true, maxlength: 320 },
   description: { type: String, trim: true, maxlength: 20000 },
+  // A zero price is valid only when this item is intentionally offered as a gift.
   price: { type: Number, min: 0 },
+  isFree: { type: Boolean, default: false, index: true },
   // Percentage of paid revenue retained by CodersVoice. The remaining share is attributed to a partner.
   ownerSharePercent: { type: Number, min: 0, max: 100, default: 100 },
   currency: { type: String, default: 'INR', enum: ['INR'] },

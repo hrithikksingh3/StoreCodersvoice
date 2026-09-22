@@ -1,13 +1,13 @@
 const crypto = require('crypto'); const Order = require('../models/Order'); const { pagination, text } = require('../utils/content'); const postPaymentActions = require('../utils/postPaymentActions'); const audit = require('../utils/audit');
 const downloadToken = (id, email) => crypto.createHmac('sha256', process.env.DOWNLOAD_TOKEN_SECRET || process.env.JWT_SECRET).update(`${id}:${email}`).digest('hex');
-const adminOrderFields = 'email productId productName amount status fulfillmentStatus fulfillmentError fulfillmentEmailId razorpayOrderId razorpayPaymentId paymentMethod paymentCapturedAt createdAt updatedAt';
+const adminOrderFields = 'email customerName phone productId productName amount status fulfillmentStatus fulfillmentError fulfillmentEmailId razorpayOrderId razorpayPaymentId paymentMethod paymentCapturedAt createdAt updatedAt';
 const buildOrderQuery = (req, includeMethod = false) => {
   const query = {};
   if (['created', 'paid', 'failed'].includes(req.query.status)) query.status = req.query.status;
   if (includeMethod && req.query.method && text(req.query.method, 50)) query.paymentMethod = req.query.method;
   if (req.query.q && text(req.query.q, 120)) {
     const q = new RegExp(req.query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    query.$or = [{ email: q }, { productName: q }, { razorpayOrderId: q }, { razorpayPaymentId: q }, ...(includeMethod ? [{ paymentMethod: q }] : [])];
+    query.$or = [{ email: q }, { customerName: q }, { phone: q }, { productName: q }, { razorpayOrderId: q }, { razorpayPaymentId: q }, ...(includeMethod ? [{ paymentMethod: q }] : [])];
   }
   const from = req.query.from && new Date(req.query.from); const to = req.query.to && new Date(req.query.to);
   if (to && !Number.isNaN(to.valueOf())) to.setUTCHours(23, 59, 59, 999);
