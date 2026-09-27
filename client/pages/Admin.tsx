@@ -13,6 +13,7 @@ const blankProduct = {
   name: "",
   slug: "",
   shortDescription: "",
+  highlights: "",
   description: "",
   price: 0,
   isFree: false,
@@ -47,6 +48,10 @@ const listify = (value: unknown) =>
         .split(/[,\n]/)
         .map((item) => item.trim())
         .filter(Boolean)
+    : value;
+const lineList = (value: unknown) =>
+  typeof value === "string"
+    ? value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
     : value;
 const formatINR = (value: unknown) => `INR ${Number(value || 0).toLocaleString("en-IN")}`;
 const localDateValue = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -474,6 +479,7 @@ const Admin: React.FC = () => {
       tags: (item.tags || []).join(", "),
       techStack: (item.techStack || []).join(", "),
       galleryImages: (item.galleryImages || []).join(", "),
+      highlights: (item.highlights || []).join("\n"),
     });
   };
   const openCreate = () => {
@@ -502,8 +508,21 @@ const Admin: React.FC = () => {
         return;
       }
     }
+    const highlights = lineList(editing.highlights);
+    if (
+      Array.isArray(highlights) &&
+      (highlights.length > 6 ||
+        highlights.some((highlight) => highlight.length > 160))
+    ) {
+      const message = "Use up to 6 key highlights, with no more than 160 characters each.";
+      setEditorError(message);
+      reportError(message);
+      return;
+    }
+
     const prepared = {
       ...editing,
+      highlights,
       isFree: editing.isFree === true,
       price: editing.isFree === true ? 0 : Number(editing.price),
       tags: listify(editing.tags),
@@ -598,6 +617,43 @@ const Admin: React.FC = () => {
     } finally {
       setPendingAction("");
     }
+  };
+  const sendCheckoutReminder = async (id: string) => {
+    if (!window.confirm("Send a branded checkout reminder to this customer?")) return;
+    setPendingAction(`${id}:checkout-reminder`);
+    try {
+      await api(`/api/admin/orders/${id}/send-checkout-reminder`, { method: "POST" });
+      announce("Checkout reminder sent.");
+      await load(view === "payments" ? "payments" : "orders", pagination.page);
+    } catch (error: any) {
+      reportError(error.message || "Unable to send the checkout reminder.");
+    } finally {
+      setPendingAction("");
+    }
+  };
+  const isPendingPaymentOrder = (item: Item) => ["created", "failed"].includes(item.status);
+  const isPendingDeliveryOrder = (item: Item) =>
+    item.status === "paid" && ["pending", "failed"].includes(item.fulfillmentStatus || "pending");
+  const whatsappNumber = (value: unknown) => {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+    if (digits.length === 10) digits = `91${digits}`;
+    return /^[1-9]\d{9,14}$/.test(digits) ? digits : "";
+  };
+  const openWhatsAppReminder = (item: Item) => {
+    const number = whatsappNumber(item.phone);
+    const shareUrl = String(item.productShareUrl || item.productUrl || "");
+    if (!number || !shareUrl) {
+      reportError("A valid WhatsApp number and a public product share link are required for this reminder.");
+      return;
+    }
+    const name = String(item.customerName || "").trim() || "there";
+    const amount = item.paymentMethod === "free" ? "Complimentary gift" : `₹${Number(item.amount || 0).toLocaleString("en-IN")}`;
+    const message = isPendingPaymentOrder(item)
+      ? `*CodersVoice | Checkout reminder*\n\nHello ${name},\n\nYou recently selected *${item.productName}*.\n*Price:* ${amount}\n\nYour product is still available. Complete your secure checkout here:\n${shareUrl}\n\nNeed help? Reply to this message and our team will be happy to assist.\n\n— Team CodersVoice`
+      : `*CodersVoice | Delivery update*\n\nHello ${name},\n\nWe are preparing secure access for your order: *${item.productName}*.\n*Order email:* ${item.email}\n\nYou can review the product details here:\n${shareUrl}\n\nWe will send your secure delivery link to your email shortly.\n\n— Team CodersVoice`;
+    const popup = window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    if (popup) popup.opener = null;
   };
   const downloadReport = async (scope: "products" | "orders" | "payments" | "revenue" | "dashboard", format: "pdf" | "xlsx") => {
     const key = `${scope}:${format}`;
@@ -842,15 +898,19 @@ const Admin: React.FC = () => {
     setUploadingField("galleryImages");
     setEditorError("");
     try {
-      const stored = current.filter((url) => /^https:\/\/res\.cloudinary\.com\//i.test(url));
-      for (const sourceUrl of remoteUrls) {
+      const resolved: string[] = [];
+      for (const sourceUrl of current) {
+        if (/^https:\/\/res\.cloudinary\.com\//i.test(sourceUrl)) {
+          resolved.push(sourceUrl);
+          continue;
+        }
         const form = new FormData();
         form.append("kind", "products");
         form.append("sourceUrl", sourceUrl);
         const response = await api<{ item: { url: string } }>("/api/admin/uploads/images", { method: "POST", body: form });
-        stored.push(response.item.url);
+        resolved.push(response.item.url);
       }
-      setEditing({ ...editing, galleryImages: stored.join(", ") });
+      setEditing({ ...editing, galleryImages: resolved.join(", ") });
       announce(`${remoteUrls.length} gallery image${remoteUrls.length === 1 ? "" : "s"} imported to Cloudinary.`);
     } catch (error: any) {
       const message = error.message || "Could not import the gallery image URLs.";
@@ -859,6 +919,14 @@ const Admin: React.FC = () => {
     } finally {
       setUploadingField("");
     }
+  };
+  const moveGalleryImage = (index: number, direction: -1 | 1) => {
+    if (!editing) return;
+    const images = galleryItems();
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= images.length) return;
+    [images[index], images[nextIndex]] = [images[nextIndex], images[index]];
+    setEditing({ ...editing, galleryImages: images.join(", ") });
   };
   const galleryField = () => {
     const images = galleryItems();
@@ -874,8 +942,8 @@ const Admin: React.FC = () => {
         <button type="button" disabled={uploadingField === "galleryImages"} onClick={importGalleryUrls} className="rounded-lg border border-blue-500/50 px-3 py-2 text-xs font-bold text-blue-300 transition hover:bg-blue-500/10 disabled:opacity-50">Import pasted URLs to Cloudinary</button>
         <span className="text-xs text-slate-500">{images.length}/5 images</span>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Use local uploads or pasted URLs. Each saved image is stored in Cloudinary and shown publicly only after the product is unhidden.</p>
-      {images.length > 0 && <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">{images.map((url, index) => <div key={`${url}-${index}`} className="group relative overflow-hidden rounded-lg border border-slate-700"><img src={url} alt={`Gallery image ${index + 1}`} className="h-20 w-full object-cover" /><button type="button" onClick={() => setEditing({ ...editing!, galleryImages: images.filter((_: string, itemIndex: number) => itemIndex !== index).join(", ") })} className="absolute right-1 top-1 rounded bg-slate-950/85 px-1.5 py-1 text-xs text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Remove gallery image ${index + 1}`}>×</button></div>)}</div>}
+      <p className="mt-2 text-xs text-slate-500">Order is preserved exactly as shown: the cover thumbnail appears first on the Store, followed by gallery image 1–5. Use the arrows to set the gallery sequence before saving.</p>
+      {images.length > 0 && <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">{images.map((url, index) => <div key={`${url}-${index}`} className="group relative overflow-hidden rounded-lg border border-slate-700"><img src={url} alt={`Gallery image ${index + 1}`} className="h-20 w-full object-cover" /><span className="absolute left-1 top-1 rounded bg-slate-950/90 px-1.5 py-1 text-[10px] font-black text-white">{index + 1}</span><div className="absolute bottom-1 left-1 right-1 flex items-center justify-between gap-1 rounded bg-slate-950/90 p-1 text-xs text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"><button type="button" disabled={index === 0} onClick={() => moveGalleryImage(index, -1)} className="rounded px-1.5 py-0.5 hover:bg-slate-700 disabled:opacity-30" aria-label={`Move gallery image ${index + 1} earlier`} title="Move earlier">←</button><button type="button" disabled={index === images.length - 1} onClick={() => moveGalleryImage(index, 1)} className="rounded px-1.5 py-0.5 hover:bg-slate-700 disabled:opacity-30" aria-label={`Move gallery image ${index + 1} later`} title="Move later">→</button><button type="button" onClick={() => setEditing({ ...editing!, galleryImages: images.filter((_: string, itemIndex: number) => itemIndex !== index).join(", ") })} className="rounded px-1.5 py-0.5 text-red-200 hover:bg-red-500/20" aria-label={`Remove gallery image ${index + 1}`} title="Remove">×</button></div></div>)}</div>}
     </div>;
   };
   const imageField = (key: string, label: string, required = false) => (
@@ -1307,7 +1375,11 @@ const Admin: React.FC = () => {
                         {new Date(item.createdAt).toLocaleDateString()}
                       </td>
                       <td className="p-4 text-right">
-                        {item.status === "paid" && <button type="button" disabled={Boolean(pendingAction)} onClick={() => resendDeliveryEmail(item._id)} className="rounded-lg border border-blue-500/35 px-3 py-2 text-xs font-bold text-blue-300 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40">Resend email</button>}
+                        <div className="flex justify-end gap-2">
+                          {isPendingPaymentOrder(item) && <button type="button" disabled={Boolean(pendingAction)} onClick={() => sendCheckoutReminder(item._id)} className="rounded-lg border border-amber-400/35 px-3 py-2 text-xs font-bold text-amber-200 transition hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-40">Send reminder</button>}
+                          {isPendingDeliveryOrder(item) && <button type="button" disabled={Boolean(pendingAction)} onClick={() => resendDeliveryEmail(item._id)} className="rounded-lg border border-blue-500/35 px-3 py-2 text-xs font-bold text-blue-300 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40">Resend delivery</button>}
+                          {(isPendingPaymentOrder(item) || isPendingDeliveryOrder(item)) && item.phone && <button type="button" disabled={Boolean(pendingAction) || !item.productUrl} onClick={() => openWhatsAppReminder(item)} className="rounded-lg border border-emerald-500/35 px-3 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40" title={item.productUrl ? "Open a prefilled WhatsApp reminder" : "The product is no longer public"}>WhatsApp</button>}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1343,7 +1415,11 @@ const Admin: React.FC = () => {
                       <td className="p-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${item.status === "paid" ? "bg-emerald-500/15 text-emerald-300" : item.status === "failed" ? "bg-red-500/15 text-red-300" : "bg-amber-400/15 text-amber-300"}`}>{item.status}</span></td>
                       <td className="p-4 text-slate-400">{new Date(item.paymentCapturedAt || item.createdAt).toLocaleString()}</td>
                       <td className="p-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${item.fulfillmentStatus === "delivered" ? "bg-emerald-500/15 text-emerald-300" : item.fulfillmentStatus === "failed" ? "bg-red-500/15 text-red-300" : "bg-amber-400/15 text-amber-300"}`}>{item.fulfillmentStatus || "pending"}</span></td>
-                      <td className="p-4 text-right">{item.status === "paid" && <button type="button" disabled={Boolean(pendingAction)} onClick={() => resendDeliveryEmail(item._id)} className="rounded-lg border border-blue-500/35 px-3 py-2 text-xs font-bold text-blue-300 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40">Resend email</button>}</td>
+                      <td className="p-4 text-right"><div className="flex justify-end gap-2">
+                        {isPendingPaymentOrder(item) && <button type="button" disabled={Boolean(pendingAction)} onClick={() => sendCheckoutReminder(item._id)} className="rounded-lg border border-amber-400/35 px-3 py-2 text-xs font-bold text-amber-200 transition hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-40">Send reminder</button>}
+                        {isPendingDeliveryOrder(item) && <button type="button" disabled={Boolean(pendingAction)} onClick={() => resendDeliveryEmail(item._id)} className="rounded-lg border border-blue-500/35 px-3 py-2 text-xs font-bold text-blue-300 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40">Resend delivery</button>}
+                        {(isPendingPaymentOrder(item) || isPendingDeliveryOrder(item)) && item.phone && <button type="button" disabled={Boolean(pendingAction) || !item.productUrl} onClick={() => openWhatsAppReminder(item)} className="rounded-lg border border-emerald-500/35 px-3 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40" title={item.productUrl ? "Open a prefilled WhatsApp reminder" : "The product is no longer public"}>WhatsApp</button>}
+                      </div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1570,7 +1646,20 @@ const Admin: React.FC = () => {
                     {field("shortDescription", "Short description", "text", true)}
                   </div>
                   <label className="md:col-span-2 block text-sm font-medium text-slate-300">
-                    Description<span className="ml-1 text-red-400">*</span>
+                    Key highlights <span className="font-normal text-slate-500">(up to 6, one per line)</span>
+                    <textarea
+                      value={editing.highlights || ""}
+                      maxLength={966}
+                      placeholder={"Ready-to-post content\nBuilt for Instagram creators\nInstant digital delivery"}
+                      onChange={(event) => setEditing({ ...editing, highlights: event.target.value })}
+                      className="mt-1.5 min-h-28 w-full rounded-xl border border-slate-700 bg-slate-950 p-3"
+                    />
+                    <span className="mt-1 block text-xs font-normal text-slate-500">
+                      Concise selling points appear beside the price. The complete description appears lower on the product page.
+                    </span>
+                  </label>
+                  <label className="md:col-span-2 block text-sm font-medium text-slate-300">
+                    Full description<span className="ml-1 text-red-400">*</span>
                     <textarea
                       required
                       value={editing.description || ""}

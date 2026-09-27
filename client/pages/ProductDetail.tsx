@@ -7,6 +7,30 @@ import { API_BASE_URL } from "../config";
 import toast from "react-hot-toast";
 import { api } from '../api';
 
+const bulletPattern = /^(?:[-*•]\s+|[✅✔]\s*)/;
+const fallbackHighlights = (description: string) =>
+  String(description || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => bulletPattern.test(line))
+    .map((line) => line.replace(bulletPattern, ""))
+    .slice(0, 6);
+
+const FormattedProductDescription: React.FC<{ description: string }> = ({ description }) => (
+  <div className="space-y-3 text-lg leading-relaxed text-slate-400">
+    {String(description || "").split(/\r?\n/).map((line, index) => {
+      const trimmed = line.trim();
+      if (!trimmed) return <div key={`space-${index}`} className="h-1.5" aria-hidden="true" />;
+      if (bulletPattern.test(trimmed)) {
+        return <div key={`bullet-${index}`} className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400" aria-hidden="true">✓</span><p>{trimmed.replace(bulletPattern, "")}</p></div>;
+      }
+      const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
+      if (heading) return <h2 key={`heading-${index}`} className="pt-2 text-xl font-bold text-white">{heading[1]}</h2>;
+      return <p key={`paragraph-${index}`} className={trimmed.endsWith(":") ? "font-semibold text-slate-200" : ""}>{trimmed}</p>;
+    })}
+  </div>
+);
+
 
 
 const ProductDetail: React.FC = () => {
@@ -37,6 +61,9 @@ const [claimedGift, setClaimedGift] = useState(false);
   useEffect(() => { if (!product) return; document.querySelector('meta[name="robots"]')?.setAttribute('content', 'index,follow'); return () => document.querySelector('meta[name="robots"]')?.setAttribute('content', 'index,follow'); }, [product]);
 
   if (!product) return <div className="pt-32 text-center text-slate-400">Loading product…</div>;
+  const highlights = product.highlights?.length
+    ? product.highlights.slice(0, 6)
+    : fallbackHighlights(product.fullDescription);
 
   //handle buy now click
 
@@ -164,7 +191,7 @@ const confirmCheckout = async () => {
               <img src={activeImage} alt={product.title} className="w-full h-full object-cover" />
             </div>
             <div className="flex gap-4 overflow-x-auto pb-2">
-              {[product.thumbnail, ...product.galleryImages].map((img, idx) => (
+              {[product.thumbnail, ...(product.galleryImages || []).filter((image) => image && image !== product.thumbnail)].map((img, idx) => (
                 <button 
                   key={idx}
                   onClick={() => setActiveImage(img)}
@@ -184,10 +211,22 @@ const confirmCheckout = async () => {
             </div>
             <h1 className="text-4xl md:text-5xl font-black mb-6 text-white">{product.title}</h1>
             <div className={`text-3xl font-black mb-8 ${product.isFree ? "text-emerald-300" : "text-white"}`}>{product.isFree ? "Free gift" : `₹${product.price}`}</div>
-            
-            <p className="text-slate-400 text-lg mb-10 leading-relaxed">
-              {product.fullDescription}
-            </p>
+            {product.shortDescription && (
+              <p className="mb-7 max-w-2xl text-lg leading-relaxed text-slate-300">{product.shortDescription}</p>
+            )}
+            {highlights.length > 0 && (
+              <section aria-labelledby="product-highlights" className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+                <h2 id="product-highlights" className="text-sm font-black uppercase tracking-wider text-white">Key highlights</h2>
+                <ul className="mt-4 space-y-3">
+                  {highlights.map((highlight, index) => (
+                    <li key={`${highlight}-${index}`} className="flex items-start gap-2 text-slate-300">
+                      <span className="mt-0.5 text-emerald-400" aria-hidden="true">✓</span>
+                      <span>{highlight}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
               <a 
@@ -247,6 +286,14 @@ const confirmCheckout = async () => {
             </div>
           </div>
         </div>
+
+        <section className="mb-24 rounded-3xl border border-slate-800 bg-slate-900/45 p-6 md:p-10">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-400">Product details</p>
+          <h2 className="mt-3 text-3xl font-black text-white">About {product.title}</h2>
+          <div className="mt-7 max-w-4xl">
+            <FormattedProductDescription description={product.fullDescription} />
+          </div>
+        </section>
 
         {/* Similar Products */}
         {similarProducts.length > 0 && (

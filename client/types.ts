@@ -14,6 +14,7 @@ export interface Product {
   demoUrl: string;
   tags: string[];
   shortDescription: string;
+  highlights?: string[];
   fullDescription: string;
   galleryImages: string[];
   techStack: string[];

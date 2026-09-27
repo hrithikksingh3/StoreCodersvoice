@@ -71,6 +71,7 @@ exports.createOrder = async (req, res) => {
         productId: String(product._id),
         product: product._id,
         productName: product.name,
+        productSlug: product.slug,
         amount: 0,
         ownerSharePercent: Number.isFinite(Number(product.ownerSharePercent)) ? Number(product.ownerSharePercent) : 100,
         downloadUrl: product.downloadUrl,
@@ -101,6 +102,7 @@ exports.createOrder = async (req, res) => {
       productId: String(product._id),
       product: product._id,
       productName: product.name,
+      productSlug: product.slug,
       amount: price,
       ownerSharePercent: Number.isFinite(Number(product.ownerSharePercent)) ? Number(product.ownerSharePercent) : 100,
       downloadUrl: product.downloadUrl, // ✅ snapshot

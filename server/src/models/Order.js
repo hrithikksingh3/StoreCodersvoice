@@ -58,6 +58,9 @@ const orderSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    // Public product identity retained for safe checkout reminders. The private
+    // download URL is never used in reminder emails or WhatsApp messages.
+    productSlug: { type: String, trim: true, maxlength: 180 },
     amount: {
       type: Number,
       required: true
@@ -79,7 +82,9 @@ const orderSchema = new mongoose.Schema(
     fulfillmentEmailId: { type: String, trim: true, index: true },
     fulfillmentError: { type: String, trim: true, maxlength: 500 },
     fulfillmentAttemptedAt: Date,
-    fulfilledAt: Date
+    fulfilledAt: Date,
+    checkoutReminderSentAt: Date,
+    checkoutReminderEmailId: { type: String, trim: true, maxlength: 120 },
   },
   { timestamps: true }
 );

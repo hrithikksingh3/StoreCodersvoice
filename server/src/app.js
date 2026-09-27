@@ -29,6 +29,7 @@ app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders:
 const downloadLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many download requests. Please try again later.' } });
 const reportLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many report requests. Please try again later.' } });
 const dataManagementLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 12, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many data-management requests. Please try again later.' } });
+const reminderLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 12, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many reminder requests. Please try again later.' } });
 
 app.get('/', (req, res) => {
   res.send('CodersVoice Backend API Running');
@@ -52,6 +53,7 @@ app.get('/api/admin/payments', requireAdmin, orders.listPayments);
 app.get('/api/admin/revenue/products', requireAdmin, reportLimit, revenue.productOptions);
 app.get('/api/admin/revenue', requireAdmin, reportLimit, revenue.analytics);
 app.post('/api/admin/orders/:id/resend-email', requireAdmin, require('./middleware/auth').requireCsrf, orders.resendEmail);
+app.post('/api/admin/orders/:id/send-checkout-reminder', requireAdmin, require('./middleware/auth').requireCsrf, reminderLimit, orders.sendCheckoutReminder);
 app.get('/api/admin/reports/products', requireAdmin, reportLimit, reports.products);
 app.get('/api/admin/reports/orders', requireAdmin, reportLimit, reports.orders);
 app.get('/api/admin/reports/payments', requireAdmin, reportLimit, reports.payments);
@@ -66,6 +68,7 @@ app.post('/api/admin/data-management/purge', requireAdmin, require('./middleware
 app.get('/api/admin/settings', requireAdmin, meta.getSettings);
 app.put('/api/admin/settings', requireAdmin, require('./middleware/auth').requireCsrf, meta.updateSettings);
 const seo = require('./controllers/seo.controller');
+app.get('/api/share/product/:slug', seo.shareProduct);
 app.get('/robots.txt', seo.robots);
 app.get('/sitemap.xml', seo.sitemap);
 

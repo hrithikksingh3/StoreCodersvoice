@@ -10,6 +10,10 @@ const productSchema = new mongoose.Schema({
   name: { type: String, trim: true, maxlength: 160 },
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, maxlength: 180, match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/ },
   shortDescription: { type: String, trim: true, maxlength: 320 },
+  highlights: {
+    type: [{ type: String, trim: true, maxlength: 160 }],
+    validate: { validator: (value) => !value || value.length <= 6, message: 'Highlights can contain at most 6 items' },
+  },
   description: { type: String, trim: true, maxlength: 20000 },
   // A zero price is valid only when this item is intentionally offered as a gift.
   price: { type: Number, min: 0 },

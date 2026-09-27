@@ -1,7 +1,7 @@
 const Product = require('../models/Product');
 const { pagination, slugify, text, requiredText, validUrl, stringArray, publicProduct } = require('../utils/content');
 const audit = require('../utils/audit');
-const fields = ['name', 'slug', 'shortDescription', 'description', 'price', 'isFree', 'ownerSharePercent', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
+const fields = ['name', 'slug', 'shortDescription', 'highlights', 'description', 'price', 'isFree', 'ownerSharePercent', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
 const allowedStatuses = ['draft', 'published', 'hidden', 'archived'];
 
 function validate(input, publishing = false) {
@@ -20,6 +20,7 @@ function validate(input, publishing = false) {
   if (Object.hasOwn(value, 'ownerSharePercent') && (!Number.isFinite(Number(value.ownerSharePercent)) || Number(value.ownerSharePercent) < 0 || Number(value.ownerSharePercent) > 100)) errors.push('CodersVoice revenue share must be between 0 and 100');
   if (Object.hasOwn(value, 'category') && !requiredText(value.category, 80)) errors.push('Category is required');
   if (Object.hasOwn(value, 'shortDescription') && !requiredText(value.shortDescription, 320)) errors.push('Short description is required');
+  if (Object.hasOwn(value, 'highlights') && (!Array.isArray(value.highlights) || value.highlights.length > 6 || !value.highlights.every((item) => requiredText(item, 160)))) errors.push('Highlights must contain up to 6 short text items');
   if (Object.hasOwn(value, 'description') && !requiredText(value.description, 20000)) errors.push('Description is required');
   if (Object.hasOwn(value, 'thumbnail') && !validUrl(value.thumbnail)) errors.push('Thumbnail must be an http(s) URL');
   for (const key of ['demoUrl', 'downloadUrl', 'canonicalUrl', 'ogImage']) if (Object.hasOwn(value, key) && !validUrl(value[key])) errors.push(`${key} must be an http(s) URL`);
