@@ -1574,6 +1574,18 @@ const Admin: React.FC = () => {
                   className="mt-1.5 min-h-28 w-full rounded-xl border border-slate-700 bg-slate-950 p-3"
                 />
               </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={settings.marketplaceWarmupEnabled !== false}
+                  onChange={(event) => setSettings({ ...settings, marketplaceWarmupEnabled: event.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-950 text-cyan-500 focus:ring-cyan-500"
+                />
+                <span>
+                  <span className="block font-bold text-cyan-100">Marketplace warm-up screen</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-400">Show the animated product-cart experience only when the public Store needs more than 1.25 seconds to load. Keep this on for Render free-tier cold starts; turn it off when your backend stays awake.</span>
+                </span>
+              </label>
               <button
                 disabled={saving}
                 className="rounded-xl bg-blue-600 px-4 py-2.5 font-bold disabled:opacity-50"

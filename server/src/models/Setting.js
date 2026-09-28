@@ -6,6 +6,7 @@ const settingSchema = new mongoose.Schema({
   defaultAuthor: { type: String, default: 'CodersVoice', maxlength: 100 },
   siteTitle: { type: String, default: 'CodersVoice Store', maxlength: 100 },
   defaultDescription: { type: String, default: 'Premium digital products for builders.', maxlength: 170 },
-  defaultOgImage: String
+  defaultOgImage: String,
+  marketplaceWarmupEnabled: { type: Boolean, default: true }
 }, { timestamps: true });
 module.exports = mongoose.model('Setting', settingSchema);

@@ -5,20 +5,125 @@ import ProductCard from '../components/ProductCard';
 import { Category, Product } from '../types';
 import { api } from '../api';
 
+const WARMUP_PREFERENCE_KEY = 'codersvoice:marketplace-warmup-enabled';
+const getCachedWarmupPreference = () => {
+  try {
+    return window.localStorage.getItem(WARMUP_PREFERENCE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+};
+
+const MarketplaceWarmupOverlay: React.FC<{ finishing: boolean }> = ({ finishing }) => {
+  const messages = [
+    'Waking up the marketplace',
+    'Curating trending developer assets',
+    'Preparing secure product details',
+  ];
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setMessageIndex((current) => (current + 1) % messages.length), 2400);
+    return () => window.clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Preparing the CodersVoice marketplace"
+      className={`fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-slate-950/80 px-5 py-10 backdrop-blur-xl transition-all duration-300 ${finishing ? 'pointer-events-none scale-[1.02] opacity-0' : 'opacity-100'}`}
+    >
+      <div aria-hidden="true" className="cv-warmup-orbit cv-warmup-orbit-one" />
+      <div aria-hidden="true" className="cv-warmup-orbit cv-warmup-orbit-two" />
+      <div className="relative w-full max-w-md rounded-[2rem] border border-blue-300/20 bg-slate-950/80 p-7 text-center shadow-2xl shadow-blue-950/60 sm:p-10">
+        <div aria-hidden="true" className="absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
+        <div className="mx-auto flex h-44 w-52 items-center justify-center">
+          <svg viewBox="0 0 240 180" className="h-full w-full overflow-visible" fill="none">
+            <path className="cv-warmup-road" d="M20 144h200" />
+            <path className="cv-warmup-cart-stroke" d="M44 44h23l15 67h86l17-45H76" />
+            <path className="cv-warmup-cart-stroke cv-warmup-cart-detail" d="M92 83h83M111 111l-5 15m45-15 5 15" />
+            <circle className="cv-warmup-wheel cv-warmup-wheel-left" cx="104" cy="135" r="12" />
+            <circle className="cv-warmup-wheel cv-warmup-wheel-right" cx="158" cy="135" r="12" />
+            <rect className="cv-warmup-package" x="113" y="37" width="42" height="38" rx="6" />
+            <path className="cv-warmup-package-mark" d="M134 37v38m-21-19h42" />
+            <path className="cv-warmup-spark cv-warmup-spark-one" d="m178 42 5 5 8-10" />
+            <path className="cv-warmup-spark cv-warmup-spark-two" d="m64 73 4 4 7-9" />
+          </svg>
+        </div>
+        <p className="mt-2 text-xs font-black uppercase tracking-[0.24em] text-cyan-300">CodersVoice marketplace</p>
+        <h2 className="mt-4 text-2xl font-black text-white sm:text-3xl">Finding the good stuff…</h2>
+        <p className="mt-3 min-h-6 text-sm font-medium text-slate-300 transition-opacity">{messages[messageIndex]}</p>
+        <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-slate-400">Please wait while we arrange today’s trending projects, tools, and creator bundles for you.</p>
+        <div className="mx-auto mt-7 flex w-32 justify-between" aria-hidden="true">
+          <span className="cv-warmup-dot" />
+          <span className="cv-warmup-dot cv-warmup-dot-delay-one" />
+          <span className="cv-warmup-dot cv-warmup-dot-delay-two" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Store: React.FC = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const initialCategory = queryParams.get('category') as Category | null;
+  const warmupPreview = import.meta.env.DEV && queryParams.get('warmupPreview') === '1';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [warmupVisible, setWarmupVisible] = useState(false);
+  const [warmupFinishing, setWarmupFinishing] = useState(false);
+  const [warmupEnabled] = useState(getCachedWarmupPreference);
   const [activeCategory, setActiveCategory] = useState<Category | 'All'>(initialCategory || 'All');
   const [sortBy, setSortBy] = useState<'newest' | 'price-low' | 'price-high' | 'popularity'>('newest');
 
   const categories: (Category | 'All')[] = ['All', ...products.map((product) => product.category).filter((category, index, all) => all.indexOf(category) === index)];
 
-  useEffect(() => { api<{ items: Product[] }>('/api/products?limit=100&sort=featured').then((data) => setProducts(data.items)).catch(() => setProducts([])).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    let active = true;
+    let awaitingCatalogue = true;
+    const startedAt = Date.now();
+    const warmupDelay = window.setTimeout(() => {
+      if (active && awaitingCatalogue && warmupEnabled) setWarmupVisible(true);
+    }, 1250);
+    if (warmupPreview) setWarmupVisible(true);
+
+    api<{ items: Product[]; marketplaceWarmupEnabled?: boolean }>('/api/products?limit=100&sort=featured')
+      .then((data) => {
+        if (!active) return;
+        setProducts(data.items);
+        try {
+          window.localStorage.setItem(WARMUP_PREFERENCE_KEY, data.marketplaceWarmupEnabled === false ? 'false' : 'true');
+        } catch {
+          // Storage can be unavailable in private browsing; the loader still works.
+        }
+      })
+      .catch(() => { if (active) setProducts([]); })
+      .finally(() => {
+        awaitingCatalogue = false;
+        window.clearTimeout(warmupDelay);
+        if (!active) return;
+        const remainingPreviewTime = warmupPreview ? Math.max(0, 2800 - (Date.now() - startedAt)) : 0;
+        window.setTimeout(() => {
+          if (!active) return;
+          setLoading(false);
+          setWarmupFinishing(true);
+          window.setTimeout(() => {
+            if (!active) return;
+            setWarmupVisible(false);
+            setWarmupFinishing(false);
+          }, 340);
+        }, remainingPreviewTime);
+      });
+
+    return () => {
+      active = false;
+      window.clearTimeout(warmupDelay);
+    };
+  }, [warmupEnabled, warmupPreview]);
 
   const filteredProducts = useMemo(() => {
     let result = products.filter(p => {
@@ -46,6 +151,7 @@ const Store: React.FC = () => {
   }, [products, searchQuery, activeCategory, sortBy]);
 
   return (
+    <>
     <div className="pt-32 pb-24 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
@@ -116,6 +222,8 @@ const Store: React.FC = () => {
         )}
       </div>
     </div>
+    {warmupVisible && <MarketplaceWarmupOverlay finishing={warmupFinishing} />}
+    </>
   );
 };
 

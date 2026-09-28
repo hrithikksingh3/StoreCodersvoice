@@ -1,4 +1,5 @@
 const Product = require('../models/Product');
+const Setting = require('../models/Setting');
 const { pagination, slugify, text, requiredText, validUrl, stringArray, publicProduct } = require('../utils/content');
 const audit = require('../utils/audit');
 const fields = ['name', 'slug', 'shortDescription', 'highlights', 'description', 'price', 'isFree', 'ownerSharePercent', 'currency', 'category', 'tags', 'techStack', 'thumbnail', 'galleryImages', 'demoUrl', 'downloadUrl', 'featured', 'sortOrder', 'status', 'seoTitle', 'seoDescription', 'canonicalUrl', 'ogTitle', 'ogDescription', 'ogImage'];
@@ -36,8 +37,12 @@ exports.listPublic = async (req, res, next) => { try {
   if (req.query.category && text(req.query.category, 80)) query.category = req.query.category;
   if (req.query.q && text(req.query.q, 80)) { const pattern = new RegExp(req.query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); query.$or = [{ name: pattern }, { tags: pattern }, { category: pattern }]; }
   const sortMap = { newest: { publishedAt: -1 }, 'price-low': { price: 1 }, 'price-high': { price: -1 }, featured: { featured: -1, sortOrder: -1, publishedAt: -1 } }; const sort = sortMap[req.query.sort] || sortMap.featured;
-  const [items, total] = await Promise.all([Product.find(query).sort(sort).skip((page - 1) * limit).limit(limit).lean(), Product.countDocuments(query)]);
-  res.json({ success: true, items: items.map(publicProduct), page, limit, total, pages: Math.ceil(total / limit) });
+  const [items, total, settings] = await Promise.all([
+    Product.find(query).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
+    Product.countDocuments(query),
+    Setting.findOne({ key: 'store' }, 'marketplaceWarmupEnabled').lean(),
+  ]);
+  res.json({ success: true, items: items.map(publicProduct), page, limit, total, pages: Math.ceil(total / limit), marketplaceWarmupEnabled: settings?.marketplaceWarmupEnabled !== false });
 } catch (error) { next(error); } };
 exports.getPublic = async (req, res, next) => { try { const item = await Product.findOne({ slug: req.params.slug, status: 'published' }).lean(); if (!item) return res.status(404).json({ success: false, message: 'Product not found' }); res.json({ success: true, item: publicProduct(item) }); } catch (error) { next(error); } };
 exports.listAdmin = async (req, res, next) => { try { const { page, limit } = pagination(req.query); const query = {}; if (allowedStatuses.includes(req.query.status)) query.status = req.query.status; if (req.query.category && text(req.query.category, 80)) query.category = req.query.category; if (req.query.q && text(req.query.q, 80)) { const q = new RegExp(req.query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); query.$or = [{ name: q }, { slug: q }, { category: q }, { tags: q }]; } const from = req.query.from && new Date(req.query.from); const to = req.query.to && new Date(req.query.to); if (to && !Number.isNaN(to.valueOf())) to.setUTCHours(23, 59, 59, 999); if (from && !Number.isNaN(from.valueOf())) query.updatedAt = { ...(query.updatedAt || {}), $gte: from }; if (to && !Number.isNaN(to.valueOf())) query.updatedAt = { ...(query.updatedAt || {}), $lte: to }; const [items, total] = await Promise.all([Product.find(query).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit), Product.countDocuments(query)]); res.json({ success: true, items, page, limit, total, pages: Math.ceil(total / limit) }); } catch (error) { next(error); } };
