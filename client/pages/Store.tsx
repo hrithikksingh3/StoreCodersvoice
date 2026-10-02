@@ -6,6 +6,8 @@ import { Category, Product } from '../types';
 import { api } from '../api';
 
 const WARMUP_PREFERENCE_KEY = 'codersvoice:marketplace-warmup-enabled';
+const MARKETPLACE_FILTERS = ['All', 'Web Dev Projects', 'Creator Bundle', 'Digital Products', 'Landing Pages', 'Software', 'SaaS Product', 'Fun Websites'] as const;
+const normalizeCategory = (category: string) => category === 'Creator Bundles' ? 'Creator Bundle' : category;
 const getCachedWarmupPreference = () => {
   try {
     return window.localStorage.getItem(WARMUP_PREFERENCE_KEY) !== 'false';
@@ -80,7 +82,12 @@ const Store: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<Category | 'All'>(initialCategory || 'All');
   const [sortBy, setSortBy] = useState<'newest' | 'price-low' | 'price-high' | 'popularity'>('newest');
 
-  const categories: (Category | 'All')[] = ['All', ...products.map((product) => product.category).filter((category, index, all) => all.indexOf(category) === index)];
+  const categories = [
+    ...MARKETPLACE_FILTERS,
+    ...products
+      .map((product) => normalizeCategory(product.category))
+      .filter((category, index, all) => !MARKETPLACE_FILTERS.includes(category as typeof MARKETPLACE_FILTERS[number]) && all.indexOf(category) === index),
+  ] as (Category | 'All')[];
 
   useEffect(() => {
     let active = true;
@@ -129,7 +136,7 @@ const Store: React.FC = () => {
     let result = products.filter(p => {
       const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             p.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesCategory = activeCategory === 'All' || p.category === activeCategory;
+      const matchesCategory = activeCategory === 'All' || normalizeCategory(p.category) === activeCategory;
       return matchesSearch && matchesCategory;
     });
 

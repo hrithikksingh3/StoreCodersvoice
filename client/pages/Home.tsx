@@ -95,11 +95,14 @@ const Home: React.FC = () => {
             ))} */}
             {[
   { name: 'Web Dev Projects', icon: '🚀', color: 'from-blue-600/20 to-cyan-500/20' },
+  { name: 'Creator Bundle', icon: '📹', color: 'from-green-600/20 to-emerald-500/20' },
+  { name: 'Digital Products', icon: '💎', color: 'from-sky-600/20 to-blue-500/20' },
   { name: 'Landing Pages', icon: '🎨', color: 'from-purple-600/20 to-pink-500/20' },
-  { name: 'Fun Websites', icon: '✨', color: 'from-orange-600/20 to-yellow-500/20' },
-  { name: 'Creator Bundles', icon: '📹', color: 'from-green-600/20 to-emerald-500/20' }
+  { name: 'Software', icon: '💻', color: 'from-indigo-600/20 to-violet-500/20' },
+  { name: 'SaaS Product', icon: '☁️', color: 'from-cyan-600/20 to-teal-500/20' },
+  { name: 'Fun Websites', icon: '✨', color: 'from-orange-600/20 to-yellow-500/20' }
 ].map((cat, idx) => {
-  const count = products.filter((p) => p.category === cat.name).length;
+  const count = products.filter((p) => (p.category === 'Creator Bundles' ? 'Creator Bundle' : p.category) === cat.name).length;
 
   return (
     <Link
