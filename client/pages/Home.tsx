@@ -6,6 +6,18 @@ import ProductCard from '../components/ProductCard';
 import { Product } from '../types';
 import { api } from '../api';
 
+const normalizeMarketplaceCategory = (category: string) => {
+  const normalized = String(category || '').trim().replace(/\s+/g, ' ');
+  const key = normalized.toLowerCase();
+  const aliases: Record<string, string> = {
+    'creator bundle': 'Creator Bundle',
+    'creator bundles': 'Creator Bundle',
+    'saas product': 'SaaS Product',
+    'saas products': 'SaaS Product',
+  };
+  const categories = ['Web Dev Projects', 'Creator Bundle', 'Digital Products', 'Landing Pages', 'Software', 'SaaS Product', 'Fun Websites'];
+  return aliases[key] || categories.find((item) => item.toLowerCase() === key) || normalized;
+};
 
 const Home: React.FC = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
@@ -102,7 +114,7 @@ const Home: React.FC = () => {
   { name: 'SaaS Product', icon: '☁️', color: 'from-cyan-600/20 to-teal-500/20' },
   { name: 'Fun Websites', icon: '✨', color: 'from-orange-600/20 to-yellow-500/20' }
 ].map((cat, idx) => {
-  const count = products.filter((p) => (p.category === 'Creator Bundles' ? 'Creator Bundle' : p.category) === cat.name).length;
+  const count = products.filter((p) => normalizeMarketplaceCategory(p.category) === cat.name).length;
 
   return (
     <Link

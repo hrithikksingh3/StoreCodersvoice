@@ -7,7 +7,19 @@ import { api } from '../api';
 
 const WARMUP_PREFERENCE_KEY = 'codersvoice:marketplace-warmup-enabled';
 const MARKETPLACE_FILTERS = ['All', 'Web Dev Projects', 'Creator Bundle', 'Digital Products', 'Landing Pages', 'Software', 'SaaS Product', 'Fun Websites'] as const;
-const normalizeCategory = (category: string) => category === 'Creator Bundles' ? 'Creator Bundle' : category;
+const FREE_GIFT_FILTER = 'Free Gift';
+const normalizeCategory = (category: string) => {
+  const normalized = String(category || '').trim().replace(/\s+/g, ' ');
+  const key = normalized.toLowerCase();
+  const aliases: Record<string, string> = {
+    'creator bundle': 'Creator Bundle',
+    'creator bundles': 'Creator Bundle',
+    'saas product': 'SaaS Product',
+    'saas products': 'SaaS Product',
+  };
+
+  return aliases[key] || MARKETPLACE_FILTERS.find((item) => item.toLowerCase() === key) || normalized;
+};
 const getCachedWarmupPreference = () => {
   try {
     return window.localStorage.getItem(WARMUP_PREFERENCE_KEY) !== 'false';
@@ -84,9 +96,10 @@ const Store: React.FC = () => {
 
   const categories = [
     ...MARKETPLACE_FILTERS,
+    FREE_GIFT_FILTER,
     ...products
       .map((product) => normalizeCategory(product.category))
-      .filter((category, index, all) => !MARKETPLACE_FILTERS.includes(category as typeof MARKETPLACE_FILTERS[number]) && all.indexOf(category) === index),
+      .filter((category, index, all) => !MARKETPLACE_FILTERS.includes(category as typeof MARKETPLACE_FILTERS[number]) && category !== FREE_GIFT_FILTER && all.indexOf(category) === index),
   ] as (Category | 'All')[];
 
   useEffect(() => {
@@ -136,7 +149,8 @@ const Store: React.FC = () => {
     let result = products.filter(p => {
       const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             p.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesCategory = activeCategory === 'All' || normalizeCategory(p.category) === activeCategory;
+      const matchesCategory = activeCategory === 'All'
+        || (activeCategory === FREE_GIFT_FILTER ? p.isFree === true : normalizeCategory(p.category) === activeCategory);
       return matchesSearch && matchesCategory;
     });
 

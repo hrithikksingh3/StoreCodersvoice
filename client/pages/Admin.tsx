@@ -9,6 +9,19 @@ type View =
 type Action = "duplicate" | "archive" | "publish" | "draft" | "hidden";
 type PaginationState = { page: number; limit: number; total: number; pages: number };
 
+const PRODUCT_CATEGORIES = ["Web Dev Projects", "Creator Bundle", "Digital Products", "Landing Pages", "Software", "SaaS Product", "Fun Websites"] as const;
+const normalizeProductCategory = (category: unknown) => {
+  const normalized = String(category || "").trim().replace(/\s+/g, " ");
+  const key = normalized.toLowerCase();
+  const aliases: Record<string, string> = {
+    "creator bundle": "Creator Bundle",
+    "creator bundles": "Creator Bundle",
+    "saas product": "SaaS Product",
+    "saas products": "SaaS Product",
+  };
+  return aliases[key] || PRODUCT_CATEGORIES.find((item) => item.toLowerCase() === key) || normalized;
+};
+
 const blankProduct = {
   name: "",
   slug: "",
@@ -476,6 +489,7 @@ const Admin: React.FC = () => {
     setEditorError("");
     setEditing({
       ...item,
+      category: normalizeProductCategory(item.category),
       tags: (item.tags || []).join(", "),
       techStack: (item.techStack || []).join(", "),
       galleryImages: (item.galleryImages || []).join(", "),
@@ -522,6 +536,7 @@ const Admin: React.FC = () => {
 
     const prepared = {
       ...editing,
+      category: view === "products" ? normalizeProductCategory(editing.category) : editing.category,
       highlights,
       isFree: editing.isFree === true,
       price: editing.isFree === true ? 0 : Number(editing.price),
@@ -1628,7 +1643,18 @@ const Admin: React.FC = () => {
                   <>
                     {field("name", "Product name", "text", true)}
                     {field("slug", "URL slug", "text", true)}
-                    {field("category", "Category", "text", true)}
+                    <label className="block text-sm font-medium text-slate-300">
+                      Category <span className="ml-1 text-red-400">*</span>
+                      <select
+                        required
+                        value={normalizeProductCategory(editing.category)}
+                        onChange={(event) => setEditing({ ...editing, category: event.target.value })}
+                        className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none transition focus:border-blue-500"
+                      >
+                        <option value="" disabled>Select a category</option>
+                        {PRODUCT_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                      </select>
+                    </label>
                     <label className="block text-sm font-medium text-slate-300">
                       Price (INR){!editing.isFree && <span className="ml-1 text-red-400">*</span>}
                       <input
